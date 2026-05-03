@@ -37,13 +37,30 @@ If `ssh kb` fails with "Could not resolve hostname" or prompts for a password, t
 |---|---|
 | `/opt/vault-bare.git` | **Central bare repo** — the single source of truth. Default branch: `master`. HEAD is `refs/heads/master`. Never `git commit` here. |
 | `/opt/vault` | **Working copy on the server** — `origin` points to `/opt/vault-bare.git`. Safe to `git pull` / inspect, avoid committing from here. |
-| `/usr/local/bin/rg` | Statically linked ripgrep 14.x (installed via `scripts/ecs_bootstrap_vault.sh`). |
+| `/opt/knowledge-bot` | **Application directory** — FastAPI app, deployed via `scripts/deploy/deploy_to_ecs.sh`. |
+| `/opt/knowledge-bot/.venv` | **Python 3.10 venv** — all pip dependencies installed here. |
+| `/usr/local/bin/python3.10` | Python 3.10.16 (compiled from source with OpenSSL 1.1.1w at `/usr/local/openssl11`). |
+| `/usr/local/bin/rg` | Statically linked ripgrep 14.x (installed via `scripts/deploy/ecs_bootstrap_vault.sh`). |
 
-To re-bootstrap a blank ECS (rare), run `scripts/ecs_bootstrap_vault.sh` locally and pipe it:
+To re-bootstrap a blank ECS (rare), run `scripts/deploy/ecs_bootstrap_vault.sh` locally and pipe it:
 
 ```bash
-cat scripts/ecs_bootstrap_vault.sh | ssh kb bash
+cat scripts/deploy/ecs_bootstrap_vault.sh | ssh kb bash
 ```
+
+## Application deployment
+
+One-click deploy from local machine:
+
+```bash
+bash scripts/deploy/deploy_to_ecs.sh          # full deploy (first time)
+bash scripts/deploy/deploy_to_ecs.sh update    # code + deps + restart
+bash scripts/deploy/deploy_to_ecs.sh restart   # restart service only
+bash scripts/deploy/deploy_to_ecs.sh status    # check status + logs
+bash scripts/deploy/deploy_to_ecs.sh logs      # follow live logs
+```
+
+The service runs as `systemd` unit `knowledge-bot` (uvicorn on `127.0.0.1:8000`), fronted by Nginx on port 80/443.
 
 ## OS compatibility pitfalls — CentOS 7.6 + git 1.8.3.1
 
@@ -110,6 +127,25 @@ User:      root
 Path:      /opt/vault-bare.git
 Auth:      SSH key (same ed25519 as the local machine, or a new key appended to ~/.ssh/authorized_keys)
 ```
+
+## Network & proxy
+
+The local network **cannot reach GitHub directly** (port 443 times out). A local HTTP proxy runs on `127.0.0.1:7890`.
+
+When `git push` to GitHub fails with timeout / connection reset, set the proxy and retry:
+
+```bash
+git config http.proxy http://127.0.0.1:7890
+git push -u origin main
+```
+
+To remove the proxy later (e.g. when VPN changes):
+
+```bash
+git config --unset http.proxy
+```
+
+> **Note:** The proxy is only needed for GitHub (HTTPS). SSH to ECS (`ssh kb`) goes direct and does **not** need a proxy.
 
 ## Anti-patterns
 

@@ -1,0 +1,15 @@
+# ===== Mihomo (Clash Meta) 代理配置 =====
+#
+# 此文件为 ECS 上 mihomo 代理服务的配置（/etc/mihomo/config.yaml）。
+# 包含订阅节点信息（服务器地址、密码），不提交 Git。
+#
+# 获取方式：
+#   从 Clash 订阅地址下载，需带 Clash User-Agent：
+#   curl -sL -H "User-Agent: clash-verge/v2.0.0" -o envs/mihomo.yaml "<订阅地址>"
+#
+# 部署前需修改：
+#   - external-controller 改为 127.0.0.1:9090（避免与 Nginx 9000 冲突）
+#
+# 部署位置：/etc/mihomo/config.yaml
+# systemd 服务：mihomo.service
+# 监听端口：HTTP 7890 / SOCKS5 7891（仅 127.0.0.1）

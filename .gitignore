@@ -1,4 +1,7 @@
 .env
+envs/.env
+envs/.env.secrets
+envs/mihomo.yaml
 __pycache__/
 *.pyc
 .venv/

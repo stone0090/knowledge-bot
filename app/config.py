@@ -1,12 +1,28 @@
-"""全局配置：从 .env 读取，通过 `settings` 单例访问。"""
+"""全局配置：多文件加载，通过 `settings` 单例访问。
+
+加载优先级（后者覆盖前者）：
+  1. envs/local.env 或 envs/ecs.env  —— 环境相关配置（可提交 Git）
+  2. envs/.env.secrets              —— 密钥（不提交 Git）
+  3. .env                             —— 本地覆盖 / 兜底（不提交 Git）
+
+切换环境：设置环境变量 APP_ENV=ecs 即可切换到 ECS 配置。
+"""
+import os
 from functools import lru_cache
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
+# 通过 APP_ENV 环境变量切换：local（默认） / ecs
+_APP_ENV = os.getenv("APP_ENV", "local")
+
 
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(
-        env_file=".env",
+        env_file=(
+            f"envs/{_APP_ENV}.env",  # 1. 环境配置
+            "envs/.env.secrets",         # 2. 密钥
+            ".env",                  # 3. 本地覆盖 / 兜底
+        ),
         env_file_encoding="utf-8",
         case_sensitive=False,
         extra="ignore",
@@ -45,6 +61,9 @@ class Settings(BaseSettings):
     dashscope_model_query_deep: str = "qwen3-max-2026-01-23"
     dashscope_model_query_long: str = "kimi-k2.5"
     dashscope_model_query_vision: str = "qwen3.6-plus"
+
+    # 代理（用于访问 Jina Reader / YouTube 等海外服务）
+    http_proxy: str = ""
 
     # 服务
     app_host: str = "0.0.0.0"
