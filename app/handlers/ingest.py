@@ -11,6 +11,7 @@ from app.feishu import get_feishu_client
 from app.llm import compile_knowledge
 from app.parsers import parse_any
 from app.parsers.dispatcher import ParsedContent
+from app.parsers.url_reader import FetchError
 from app.vault import commit_and_push, write_raw, write_wiki
 
 from .cards import build_ingest_card
@@ -38,7 +39,13 @@ async def ingest(*, text: str | None = None, file: tuple[bytes, str] | None = No
     client = get_feishu_client()
 
     # 1. 解析
-    parsed: ParsedContent = await parse_any(text=text, file=file)
+    try:
+        parsed: ParsedContent = await parse_any(text=text, file=file)
+    except FetchError as exc:
+        logger.warning("抓取失败: {}", exc.reason)
+        if reply_message_id:
+            await client.reply_text(reply_message_id, exc.user_hint)
+        return {"ok": False, "reason": exc.reason}
     if not parsed.text.strip():
         if reply_message_id:
             await client.reply_text(reply_message_id, "抱歉，未解析到有效内容。")

@@ -57,11 +57,11 @@
 
 ### 2b.1 ECS 一次性初始化（一键脚本）
 
-仓库提供了 [`scripts/ecs_bootstrap_vault.sh`](../scripts/ecs_bootstrap_vault.sh)，在本机一条命令搞定（覆盖：装 git / ripgrep → 建 bare → clone 工作副本 → 写入骨架 → 首次 commit+push）：
+仓库提供了 [`scripts/deploy/ecs_bootstrap_vault.sh`](../scripts/deploy/ecs_bootstrap_vault.sh)，在本机一条命令搞定（覆盖：装 git / ripgrep → 建 bare → clone 工作副本 → 写入骨架 → 首次 commit+push）：
 
 ```bash
 # 前置：先配好 SSH 免密登录 + 别名 kb（见 2b.2）
-cat scripts/ecs_bootstrap_vault.sh | ssh kb bash
+cat scripts/deploy/ecs_bootstrap_vault.sh | ssh kb bash
 ```
 
 脚本内已兼容 CentOS 7.6 的两个历史包袱：
@@ -79,10 +79,10 @@ cat scripts/ecs_bootstrap_vault.sh | ssh kb bash
 
 ### 2b.2 本机 / 手机接入
 
-**前置一次性**：本机用 [`scripts/setup_ssh_keyless.sh`](../scripts/setup_ssh_keyless.sh) 配好 SSH 免密 + 别名 `kb`（SSH 端口为 4500，非默认 22）：
+**前置一次性**：本机用 [`scripts/deploy/setup_ssh_keyless.sh`](../scripts/deploy/setup_ssh_keyless.sh) 配好 SSH 免密 + 别名 `kb`（SSH 端口为 4500，非默认 22）：
 
 ```bash
-bash scripts/setup_ssh_keyless.sh    # 输一次密码，以后 ssh kb 直连
+bash scripts/deploy/setup_ssh_keyless.sh    # 输一次密码，以后 ssh kb 直连
 ```
 
 配好之后的三端接入方式：

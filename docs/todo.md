@@ -43,10 +43,11 @@
 ### 三期（M11 / M12）
 
 - [ ] **M11** 多源抓取扩展
-  - 视频字幕：`yt-dlp --write-auto-subs`（YouTube / B站）
-  - 推特：`xreach` 或 `bird CLI`
-  - RSS 订阅抓取
-  - Reddit / Exa 全网语义搜索（需代理）
+  - ✅ 视频字幕：`yt-dlp`（YouTube / B站）已集成到 url_reader.py
+  - ✅ 微信公众号：`url-md` 已集成，反爬 + Markdown 一步到位
+  - ✅ Twitter/X：Jina Reader 尝试 + 友好降级提示
+  - 待做：RSS 订阅抓取
+  - 待做：Reddit / Exa 全网语义搜索（需代理）
 - [ ] **M12** Wiki lint + 周报
   - 扫"矛盾 / 过时 / 孤儿页 / 索引缺口"四类
   - APScheduler 周期触发 → 飞书周报卡片推送
@@ -54,7 +55,7 @@
 ## 二、优化项（未排期，随手可做）
 
 - [ ] **检索关键词抽取**：当前 `/查` 把整句当 keyword 走 ripgrep，自然问题命中率低。下一步做 LLM 关键词抽取后再扫 vault。
-- [ ] **抓取降级逻辑**：按 [技术方案.md §五](技术方案.md) 的降级表实现（空 markdown / 403 反爬 / 微信公众号域名前置拦截 / 超时重试）。当前 [url_reader.py](../app/parsers/url_reader.py) 只走最顺场景。
+- [x] **抓取降级逻辑**（已落地）：url_reader.py 重构为域名路由 + 质量检测 + FetchError 友好提示；微信公众号 url-md、视频 yt-dlp、Twitter Jina+降级、通用 Jina Reader 兜底
 - [x] **环境变量统一清理**（已随 M13/M14/M15 落地）：config.py / .env.example / .env 已同步
 
 ## 三、测试 / 运维
@@ -73,7 +74,7 @@
 
 - [x] 2026-05-03 · **M14** 飞书角色降级为只读镜像：`_mirror_to_feishu` best-effort 写 docx 到「知识库-镜像」目录（`FEISHU_MIRROR_FOLDER_TOKEN`），失败仅告警不阻断；端到端验证 docx 出现在飞书云盘 ✅
 - [x] 2026-05-03 · **M15** 索引表下线：`query.py` 改为 ripgrep 本地扫 `Wiki/**/*.md`（`app/vault/search.py`），Python fallback 兜底；删 `client.py` 的 bitable_* 方法；退休 `FEISHU_BITABLE_*` 环境变量；端到端 `/查 知识库架构` 验证 ✅
-- [x] 2026-05-03 · **M13** Vault 初始化 + Git 中央仓库：ECS 一键脚本 [`scripts/ecs_bootstrap_vault.sh`](../scripts/ecs_bootstrap_vault.sh) 走通 bare 初始化（适配 CentOS 7.6 + git 1.8.3.1 + ripgrep musl 静态包）；SSH 免密 [`scripts/setup_ssh_keyless.sh`](../scripts/setup_ssh_keyless.sh) 配好别名 `kb`；新增 `app/vault/{frontmatter,writer,git_sync,search}.py`，ingest.py 流程重写为 vault为主 + 飞书镜像兑底，.env.example 同步更新
+- [x] 2026-05-03 · **M13** Vault 初始化 + Git 中央仓库：ECS 一键脚本 [`scripts/deploy/ecs_bootstrap_vault.sh`](../scripts/deploy/ecs_bootstrap_vault.sh) 走通 bare 初始化（适配 CentOS 7.6 + git 1.8.3.1 + ripgrep musl 静态包）；SSH 免密 [`scripts/deploy/setup_ssh_keyless.sh`](../scripts/deploy/setup_ssh_keyless.sh) 配好别名 `kb`；新增 `app/vault/{frontmatter,writer,git_sync,search}.py`，ingest.py 流程重写为 vault为主 + 飞书镜像兑底，.env.example 同步更新
 - [x] 2026-05-03 · 一期文档分期（README / 技术方案 / feishu-setup 同步到“URL + 文本”口径，markitdown 拆到 `requirements-phase2.txt`）
 - [x] 2026-05-03 · 外部参考体系：落地 [01-知识库构建.md](外部参考/01-知识库构建.md) 与 [02-URL读取工具.md](外部参考/02-URL读取工具.md)；技术方案升级为 LLM Wiki 三层架构 + URL 抓取五层策略
 - [x] 2026-05-03 · DashScope 接入改走 OpenAI 兼容协议（适配 `sk-sp-` 应用空间 key）

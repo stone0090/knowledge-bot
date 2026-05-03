@@ -8,6 +8,7 @@ from typing import Any
 from loguru import logger
 
 from app.feishu import get_feishu_client
+from app.parsers.url_reader import FetchError
 
 from .ingest import ingest
 from .query import query
@@ -85,6 +86,9 @@ async def _handle_message(event: dict[str, Any]) -> None:
     await client.reply_text(message_id, "收到，正在整理…")
     try:
         await ingest(text=text, reply_message_id=message_id)
+    except FetchError as exc:
+        logger.warning("投喂抓取失败: {}", exc.reason)
+        await client.reply_text(message_id, exc.user_hint)
     except Exception as exc:
         logger.exception("ingest text failed: {}", exc)
         await client.reply_text(message_id, f"整理失败: {exc}")
