@@ -1,6 +1,6 @@
 ---
 name: docs-first-then-code
-description: Before touching any code that affects architecture, interfaces, dependencies, configuration, milestones, or cross-module contracts, the agent must first align the project documentation (README / docs/技术方案.md / docs/feishu-setup.md / docs/todo.md / docs/外部参考/*) — audit, list concrete issues, edit to consistency — and only then proceed to code changes. Use when the user asks for a feature, refactor, dependency change, phase/milestone adjustment, naming migration, or any task described in vague "also update the design" terms.
+description: Before touching any code that affects architecture, interfaces, dependencies, configuration, milestones, or cross-module contracts, the agent must first align the project documentation (README / docs/architecture.md / docs/setup.md / docs/todo.md) — audit, list concrete issues, edit to consistency — and only then proceed to code changes. Use when the user asks for a feature, refactor, dependency change, phase/milestone adjustment, naming migration, or any task described in vague "also update the design" terms.
 ---
 
 # 先改文档，再写代码（docs-first-then-code）
@@ -54,10 +54,10 @@ description: Before touching any code that affects architecture, interfaces, dep
 
 | 维度 | 必须一致的位置 |
 |------|------------|
-| 分期（一期/二期/三期） | README §功能 / `技术方案.md §零` / `feishu-setup.md §2` / `todo.md §一` |
-| 里程碑编号（M1–M12） | README §里程碑 / `todo.md §一` |
-| 目录结构（Raw/Wiki/SCHEMA） | `技术方案.md §三` / `feishu-setup.md §2` / `todo.md` |
-| 环境变量名 | `.env.example` / `feishu-setup.md` / `app/config.py` / `todo.md`（如有改名计划） |
+| 分期（一期/二期/三期） | README §功能 / `architecture.md` §核心决策 / `todo.md` |
+| 里程碑编号（M1–M12） | `todo.md` |
+| 目录结构（Raw/Wiki/SCHEMA） | `architecture.md` |
+| 环境变量名 | `envs/.env.secrets.example` / `setup.md` / `app/config.py` |
 
 任一处修改后，**立即扫另外三处**同步。
 
@@ -82,12 +82,12 @@ description: Before touching any code that affects architecture, interfaces, dep
 
 | 改动类型 | 至少要改的文档 |
 |---------|--------------|
-| 新增/下线一个里程碑 | `README.md` §里程碑 + `docs/todo.md` §一 |
-| 调整分期范围 | `README.md` §功能 + `docs/技术方案.md §零` + `docs/feishu-setup.md §2`（如涉目录）+ `docs/todo.md` |
-| 新增/改动环境变量 | `.env.example` + `docs/feishu-setup.md` + `app/config.py` + `docs/todo.md`（如计划改名） |
-| 改 Wiki 目录结构 | `docs/技术方案.md §三` + `docs/feishu-setup.md §2` + 代码里 `handlers/ingest.py::_write_wiki` |
-| 引入新的外部参考 | 本地归档 `docs/外部参考/NN-xxx.md` + `docs/外部参考/外部参考目录.md` + 被引用处 |
-| 新增"规划了但没写代码"的事 | **只**改 `docs/todo.md`（不要散落到其它文档） |
+| 新增/下线一个里程碑 | `docs/todo.md` |
+| 调整分期范围 | `README.md` §功能 + `docs/architecture.md` + `docs/todo.md` |
+| 新增/改动环境变量 | `envs/.env.secrets.example` + `docs/setup.md` + `app/config.py` |
+| 改 Wiki 目录结构 | `docs/architecture.md` + 代码里 `handlers/ingest.py` |
+| 引入新的外部参考 | `docs/外部参考/外部参考索引.md` |
+| 新增“规划了但没写代码”的事 | **只**改 `docs/todo.md` |
 
 ## 交付模板
 
@@ -117,10 +117,10 @@ description: Before touching any code that affects architecture, interfaces, dep
 
 - ❌ 错误做法：直接改 `requirements.txt` 删 `markitdown` → 跑测试 → 写完
 - ✅ 正确做法：
-  1. 识别影响面：README（功能段/里程碑/技术栈表）、`技术方案.md §零分期表`、`feishu-setup.md §1 im:resource 权限 + §6 冒烟测试`、新建 `requirements-phase2.txt`
+  1. 识别影响面：README（功能段/技术栈表）、`architecture.md`、`setup.md §1 im:resource 权限 + §8 冒烟测试`、新建 `requirements-phase2.txt`
   2. 登记 TODO：5 项文档类 + 2 项代码类（代码其实零改动，因为 markitdown 是惰性 import）
   3. 读完 4 份文档列问题清单
-  4. 按四维度交叉对齐（分期表 vs 里程碑 vs 功能段 vs 权限表）
+  4. 按维度交叉对齐（分期表 vs 功能段 vs 技术栈表）
   5. 改完给用户看摘要 → 确认 → 再跑 `curl /healthz` 验证代码零回归
 
 文档先行会把架构问题**提前暴露在文字层**，避免代码改两遍。
