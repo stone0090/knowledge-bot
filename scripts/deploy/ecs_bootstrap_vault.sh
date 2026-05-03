@@ -179,6 +179,6 @@ else
 fi
 echo ""
 echo "下一步："
-echo "  1) 在你本机：.env 里 VAULT_PATH=${VAULT_WORK}，VAULT_GIT_REMOTE=${VAULT_BARE}"
+echo "  1) 在你本机：git clone ssh://root@${SERVER_IP}${VAULT_BARE} ${VAULT_WORK}（remote 会自动写入 .git/config）"
 echo "  2) 桌面/手机 Obsidian: git clone ssh://root@${SERVER_IP}${VAULT_BARE} ~/vault"
 echo "  3) 强烈建议：ECS 改为公钥登录、关闭 root 密码登录"
