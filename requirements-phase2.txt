@@ -1,0 +1,4 @@
+# 二期：文件解析栈（PDF / PPT / Excel / Word / 图片 OCR）
+# 安装方式：pip install -r requirements-phase2.txt
+# 注意：会拖入 onnxruntime / numpy / magika 等较重依赖，约 50MB+
+markitdown>=0.0.1a3
