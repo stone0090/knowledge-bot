@@ -1,11 +1,14 @@
 # 待办
 
-## 一期剩余
+> 方法论：[llm-wiki-method.md](llm-wiki-method.md) · 运行契约：ECS `/opt/vault/SCHEMA.md`（参考 [schema-template.md](schema-template.md)）
 
-- [ ] **M15 收尾** 飞书开放平台删掉 `bitable:app` 权限
-- [ ] **M16** 移动端 Obsidian 接入验证（桌面 / iOS / Android 跨端读写）
-- [ ] **M9** SCHEMA 编译器 MVP（按 SCHEMA.md 输出实体/概念页）
-- [ ] **M10** `/查` 结果回填 `Wiki/queries/`（卡片「保存到 Wiki」按钮）
+## 一期剩余（LLM Wiki 重构）
+
+- [ ] **M10** `/查` 结果一键保存到 `Wiki/queries/`（卡片「保存到 Wiki」按钮）
+- [ ] **M9a** `compile.py` 按 `type`（entity / concept）分路 System Prompt
+- [ ] **M9b** `writer.py` 按 type 分路径 + 新 frontmatter（type/created/updated/sources/confidence/contested）
+- [ ] **M9c** `indexer.py` 自动维护 `index.md` / `log.md`（每次 ingest 追加）
+- [ ] **M9d** `lint.py` + 飞书 `/lint` 命令（孤儿页、frontmatter 缺失、stale 检测）
 
 ## 二期
 
@@ -16,7 +19,7 @@
 ## 三期
 
 - [ ] **M11** RSS / Reddit / Exa 语义搜索
-- [ ] **M12** Wiki lint + 飞书周报
+- [ ] **M12** 飞书周报（基于 log.md 自动汇总）
 
 ## 优化项
 

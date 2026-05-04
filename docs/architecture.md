@@ -10,7 +10,7 @@
 | IM 入口 | 飞书自建机器人 | SDK 完善，手机端即时投喂 |
 | 阅读端 | Obsidian 跨端 + obsidian-git | 离线可读，git 同步 |
 | 飞书角色 | 只读镜像（best-effort） | 备用阅读入口，失败不阻断 |
-| 方法论 | LLM Wiki 三层 + 红绿灯原则 | Raw 只读、SCHEMA 当契约、人机分三档 |
+| 方法论 | LLM Wiki 三层 + 红绿灯原则 | Raw 只读、SCHEMA 当契约、人机分三档，详见 [llm-wiki-method.md](llm-wiki-method.md) |
 
 ## 系统架构
 
@@ -35,9 +35,10 @@
 
 | 层 | 路径 | 角色 |
 |----|------|------|
-| Raw | `Raw/{articles,notes,files,videos}/` | 原始来源，LLM 只读不改 |
-| Wiki | `Wiki/{entities,concepts,comparisons,queries}/` + `index.md` + `log.md` | LLM 编译产物，自动维护 |
-| SCHEMA | `SCHEMA.md` | 人机契约：页面命名、模板、标签、处理流程 |
+| Raw | `Raw/{articles,notes,files,transcripts,papers,assets}/` | 原始来源，LLM 只读不改 |
+| Wiki | `Wiki/{entities,concepts,comparisons,queries}/` | LLM 编译产物，自动维护 |
+| 索引 | `index.md` + `log.md`（vault 根） | 全量导航 + 最近变更时间线 |
+| SCHEMA | `SCHEMA.md`（vault 根） | 人机契约：页面命名、模板、标签、处理流程（参考 [schema-template.md](schema-template.md)） |
 
 - **检索**：ripgrep 扫 `Wiki/**/*.md` frontmatter + 正文，毫秒级。元数据随 md 走，无外部数据库。
 - **飞书镜像**：仅 Wiki 编译产物转 docx 推云盘，best-effort，失败仅告警。
@@ -68,8 +69,8 @@
 ### 投喂（Ingest）
 
 1. 飞书发送 URL / 文本 → 抓取层拿纯文本
-2. 原文写入 `Raw/{articles|notes|videos}/`（LLM 永不修改）
-3. LLM 按 SCHEMA 编译 → `Wiki/{entities,concepts}/*.md` + 更新 index/log
+2. 原文写入 `Raw/{articles|notes|transcripts|files}/`（LLM 永不修改）
+3. LLM 按 SCHEMA.md 分类型编译 → `Wiki/{entities,concepts}/*.md` + 更新 `index.md` / `log.md`
 4. `git commit && git push` → bare 仓库
 5. 飞书镜像 Wiki → docx（best-effort）
 6. 飞书卡片回复

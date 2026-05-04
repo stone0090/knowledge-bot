@@ -12,7 +12,7 @@ from app.llm import compile_knowledge
 from app.parsers import parse_any
 from app.parsers.dispatcher import ParsedContent
 from app.parsers.url_reader import FetchError
-from app.vault import commit_and_push, write_raw, write_wiki
+from app.vault import append_log, append_index, commit_and_push, write_raw, write_wiki
 
 from .cards import build_ingest_card
 
@@ -65,13 +65,19 @@ async def ingest(*, text: str | None = None, file: tuple[bytes, str] | None = No
     )
     wiki_rel: Path = await asyncio.to_thread(
         write_wiki,
+        type=card.type,
         title=card.title,
-        area=card.area,
         tags=card.tags,
         summary=card.summary,
-        source_ref=parsed.source_ref,
+        source_ref=str(raw_rel).replace("\\", "/"),
         body_markdown=wiki_markdown,
+        aliases=card.aliases,
+        confidence=card.confidence,
     )
+
+    # 3b. 更新 index.md / log.md
+    await asyncio.to_thread(append_index, card.type, card.title, card.summary)
+    await asyncio.to_thread(append_log, card.type, card.title, str(wiki_rel).replace("\\", "/"))
 
     # 4. Git commit + push（best-effort，失败仅告警）
     await asyncio.to_thread(commit_and_push, f"ingest: {card.title}")

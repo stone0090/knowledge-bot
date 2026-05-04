@@ -1,8 +1,13 @@
-"""Vault 写入：Raw 原文存档 + Wiki 编译产物。"""
+"""Vault 写入：Raw 原文存档 + Wiki 编译产物。
+
+frontmatter 对齐 SCHEMA.md：
+- Raw：source_type / source_ref / ingested
+- Wiki：type / title / aliases / created / updated / sources / tags / confidence
+"""
 from __future__ import annotations
 
 import re
-from datetime import datetime
+from datetime import date, datetime
 from pathlib import Path
 
 from loguru import logger
@@ -11,13 +16,12 @@ from app.config import settings
 
 from .frontmatter import dump_frontmatter
 
-# area → Wiki 子目录映射（与 SCHEMA.md 保持一致）
-_AREA_TO_SUBDIR = {
-    "Concepts": "concepts",
-    "Areas-AI": "entities",
-    "Areas-Product": "entities",
-    "Areas-Mgmt": "entities",
-    "Archives": "entities",
+# type → Wiki 子目录（SCHEMA.md 契约）
+_TYPE_TO_SUBDIR = {
+    "entity": "entities",
+    "concept": "concepts",
+    "comparison": "comparisons",
+    "query": "queries",
 }
 
 _SLUG_STRIP = re.compile(r'[\\/:*?"<>|\r\n\t]+')
@@ -48,15 +52,21 @@ def write_raw(title: str, source_type: str, source_ref: str, text: str) -> Path:
     """写入 Raw 原文存档；返回相对于 vault 根的路径。"""
     root = _vault_root()
     stamp = datetime.now().strftime("%Y%m%d-%H%M%S")
-    sub = {"url": "articles", "text": "notes", "file": "files"}.get(source_type, "notes")
+    sub = {
+        "url": "articles",
+        "text": "notes",
+        "file": "files",
+        "transcript": "transcripts",
+        "paper": "papers",
+    }.get(source_type, "notes")
     filename = f"{stamp}-{_slugify(title)}.md"
     path = root / "Raw" / sub / filename
 
     meta = {
-        "title": title,
         "source_type": source_type,
         "source_ref": source_ref,
-        "captured_at": datetime.now().isoformat(timespec="seconds"),
+        "title": title,
+        "ingested": datetime.now().isoformat(timespec="seconds"),
     }
     body = text if text.endswith("\n") else text + "\n"
     content = dump_frontmatter(meta) + "\n" + body
@@ -69,31 +79,73 @@ def write_raw(title: str, source_type: str, source_ref: str, text: str) -> Path:
 
 def write_wiki(
     *,
+    type: str,
     title: str,
-    area: str,
     tags: list[str],
     summary: str,
     source_ref: str,
     body_markdown: str,
+    aliases: list[str] | None = None,
+    confidence: str = "medium",
 ) -> Path:
-    """写入 Wiki 编译产物；返回相对于 vault 根的路径。"""
+    """写入 Wiki 编译产物；返回相对于 vault 根的路径。
+
+    - type: entity | concept | comparison | query。
+    - 分路径按 SCHEMA.md；summary 不写入 frontmatter（已在正文「摘要」块）。
+    """
     root = _vault_root()
-    sub = _AREA_TO_SUBDIR.get(area, "entities")
+    sub = _TYPE_TO_SUBDIR.get(type, "entities")
     filename = f"{_slugify(title)}.md"
     path = root / "Wiki" / sub / filename
 
-    meta = {
+    today = date.today().isoformat()
+    meta: dict = {
+        "type": type,
         "title": title,
-        "area": area,
+        "aliases": aliases or [],
         "tags": tags,
-        "summary": summary,
-        "source_ref": source_ref,
-        "created_at": datetime.now().isoformat(timespec="seconds"),
+        "created": today,
+        "updated": today,
+        "sources": [source_ref] if source_ref else [],
+        "confidence": confidence,
     }
     body = body_markdown if body_markdown.endswith("\n") else body_markdown + "\n"
     content = dump_frontmatter(meta) + "\n" + body
 
     _ensure_dir(path)
     path.write_text(content, encoding="utf-8")
-    logger.info("vault.write_wiki -> {}", path)
+    logger.info("vault.write_wiki -> {} (type={})", path, type)
+    return path.relative_to(root)
+
+
+def write_query(question: str, answer_md: str, candidates: list[str] | None = None) -> Path:
+    """/查 结果回填 Wiki/queries/；返回相对路径。
+
+    文件名加 时间戳 前缀便于按日期检索，不覆盖旧档。
+    """
+    root = _vault_root()
+    stamp = datetime.now().strftime("%Y%m%d-%H%M%S")
+    filename = f"{stamp}-{_slugify(question, max_len=40)}.md"
+    path = root / "Wiki" / "queries" / filename
+
+    today = date.today().isoformat()
+    meta = {
+        "type": "query",
+        "title": question[:40],
+        "question": question,
+        "tags": ["meta/query"],
+        "created": today,
+        "updated": today,
+        "sources": candidates or [],
+    }
+    body_lines = [f"# {question}", "", "## 答复", answer_md.rstrip()]
+    if candidates:
+        body_lines += ["", "## 候选证据"]
+        body_lines += [f"- {c}" for c in candidates]
+    body = "\n".join(body_lines) + "\n"
+    content = dump_frontmatter(meta) + "\n" + body
+
+    _ensure_dir(path)
+    path.write_text(content, encoding="utf-8")
+    logger.info("vault.write_query -> {}", path)
     return path.relative_to(root)

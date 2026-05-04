@@ -31,7 +31,7 @@ knowledge-bot/
 └── requirements-phase2.txt  二期依赖（markitdown）
 
 # ECS（不在 repo 内）
-/opt/vault/                  工作副本：Raw/ + Wiki/ + SCHEMA.md
+/opt/vault/                  工作副本：Raw/ + Wiki/ + SCHEMA.md + index.md + log.md
 /opt/vault-bare.git/         中央 bare 仓库
 ```
 
@@ -55,4 +55,4 @@ knowledge-bot/
 | URL 抓取 | Jina Reader（通用）/ 内置 httpx+BS4（微信）/ yt-dlp（视频）/ Twitter 降级 |
 | 阅读端 | Obsidian + obsidian-git（桌面 SSH/HTTPS / Android HTTPS / iOS Working Copy SSH），详见 [docs/obsidian-git.md](docs/obsidian-git.md) |
 
-架构设计见 [docs/architecture.md](docs/architecture.md)，环境搭建见 [docs/setup.md](docs/setup.md)，Obsidian 同步见 [docs/obsidian-git.md](docs/obsidian-git.md)，待办见 [docs/todo.md](docs/todo.md)。
+架构设计见 [docs/architecture.md](docs/architecture.md)，知识整理方法论见 [docs/llm-wiki-method.md](docs/llm-wiki-method.md)，环境搭建见 [docs/setup.md](docs/setup.md)，Obsidian 同步见 [docs/obsidian-git.md](docs/obsidian-git.md)，待办见 [docs/todo.md](docs/todo.md)。

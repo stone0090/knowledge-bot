@@ -9,11 +9,14 @@ from loguru import logger
 
 from app.feishu import get_feishu_client
 from app.parsers.url_reader import FetchError
+from app.vault import lint_vault
+from app.vault.lint import format_lint_report
 
 from .ingest import ingest
 from .query import query
 
 QUERY_PREFIXES = ("/查", "/q", "/search")
+LINT_PREFIXES = ("/lint",)
 
 
 def _extract_text(message: dict[str, Any]) -> str:
@@ -76,6 +79,16 @@ async def _handle_message(event: dict[str, Any]) -> None:
     # 文本消息
     text = _extract_text(message)
     if not text:
+        return
+
+    if any(text.startswith(p) for p in LINT_PREFIXES):
+        try:
+            result = await asyncio.to_thread(lint_vault)
+            report = format_lint_report(result)
+        except Exception as exc:
+            logger.exception("lint failed: {}", exc)
+            report = f"Lint 失败: {exc}"
+        await client.reply_text(message_id, report)
         return
 
     if any(text.startswith(p) for p in QUERY_PREFIXES):

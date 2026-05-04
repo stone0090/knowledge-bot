@@ -42,14 +42,19 @@ def build_ingest_card(
     }
 
 
-def build_answer_card(question: str, answer_md: str) -> dict:
+def build_answer_card(question: str, answer_md: str, vault_path: str | None = None) -> dict:
+    elements: list[dict] = [
+        {"tag": "div", "text": {"tag": "lark_md", "content": answer_md}},
+    ]
+    if vault_path:
+        elements.append(
+            {"tag": "div", "text": {"tag": "lark_md", "content": f"📒 已回填：`{vault_path}`"}}
+        )
     return {
         "config": {"wide_screen_mode": True},
         "header": {
             "title": {"tag": "plain_text", "content": f"🔎 {question[:30]}"},
             "template": "blue",
         },
-        "elements": [
-            {"tag": "div", "text": {"tag": "lark_md", "content": answer_md}},
-        ],
+        "elements": elements,
     }
