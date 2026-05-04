@@ -43,11 +43,11 @@ cat scripts/deploy/ecs_bootstrap_vault.sh | ssh kb bash
 
 ### 多端接入
 
-| 端 | 工具 | clone 方式 |
-|----|------|-----------|
-| 桌面 | Obsidian + obsidian-git | `git clone kb:/opt/vault-bare.git ~/vault` |
-| iOS | Working Copy + Obsidian | host `121.196.26.127` port `4500` → clone `/opt/vault-bare.git` |
-| Android | MGit + Obsidian | 同上 |
+| 端 | 工具 | 推荐协议 | 接入方式 |
+|----|------|---------|---------|
+| 桌面（Linux / macOS / Windows）| Obsidian + obsidian-git | SSH 或 HTTPS | SSH：`git clone kb:/opt/vault-bare.git ~/vault`；HTTPS 详见 [obsidian-git.md](obsidian-git.md) |
+| Android | Obsidian + obsidian-git | HTTPS | 详见 [obsidian-git.md](obsidian-git.md) |
+| iOS | Working Copy + Obsidian | SSH | host `121.196.26.127` port `4500` → clone `/opt/vault-bare.git` |
 
 ## 4. 百炼 API
 
@@ -66,7 +66,6 @@ cat scripts/deploy/ecs_bootstrap_vault.sh | ssh kb bash
 | `envs/local.env` | 本机开发 | ✅ |
 | `envs/ecs.env` | ECS 生产 | ✅ |
 | `envs/.env.secrets` | 密钥 | ❌ |
-| `.env` | 本地覆盖（可选） | ❌ |
 
 加载优先级：`envs/{APP_ENV}.env` → `envs/.env.secrets` → `.env`
 
@@ -86,11 +85,19 @@ bash scripts/deploy/deploy_to_ecs.sh full    # 全量
 bash scripts/deploy/deploy_to_ecs.sh update  # 仅更新代码
 ```
 
-关键配置：
-- 安全组放行 9000（HTTP）、9443（HTTPS）、4500（SSH）
-- HTTPS：acme.sh + ZeroSSL 证书
+端口清单（均需在阿里云安全组放行）：
+
+| 端口 | 协议 | 用途 |
+|------|------|------|
+| 4500 | SSH | 服务器管理 + Git over SSH（`kb:/opt/vault-bare.git`） |
+| 9000 | HTTP | 飞书 webhook fallback |
+| 9443 | HTTPS | 飞书 webhook 主入口（`https://bot.shisb.com:9443/feishu/event`） |
+| 4580 | HTTP | Git over HTTP（Obsidian 备用，证书异常时使用） |
+| 4581 | HTTPS | Git over HTTPS（Obsidian 推荐，见 [obsidian-git.md](obsidian-git.md)） |
+
+其他关键配置：
+- HTTPS 证书：acme.sh + ZeroSSL，`bot.shisb.com` 同时用于 9443（飞书）与 4581（Git）
 - 代理：mihomo 访问海外服务
-- 飞书回调：`https://bot.shisb.com:9443/feishu/event`
 - systemd `Environment=APP_ENV=ecs`
 
 ## 8. 冒烟测试

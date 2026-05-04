@@ -4,7 +4,7 @@
 
 ## 功能
 
-**一期（已上线）** — 飞书发 URL / 纯文本 → 按域名路由抓取（微信 / 视频 / Twitter / 通用）→ 百炼编译为 Wiki 页 → 写入 ECS Vault（md + git）→ 飞书卡片回复。`/查` 检索 → ripgrep 扫 Wiki → 带引用回答。阅读端：Obsidian 跨端 SSH clone。
+**一期（已上线）** — 飞书发 URL / 纯文本 → 按域名路由抓取（微信 / 视频 / Twitter / 通用）→ 百炼编译为 Wiki 页 → 写入 ECS Vault（md + git）→ 飞书卡片回复。`/查` 检索 → ripgrep 扫 Wiki → 带引用回答。阅读端：Obsidian 跨端（SSH 或 HTTPS）clone。
 
 **二期** — PDF / PPT / Excel / 图片 OCR（markitdown）+ Wiki 双向链接 + 多模态智能路由
 
@@ -53,6 +53,6 @@ knowledge-bot/
 | 存储 | ECS 本地 Vault（md + git bare 仓库） |
 | 检索 | ripgrep 本地扫 Wiki frontmatter + 正文 |
 | URL 抓取 | Jina Reader（通用）/ 内置 httpx+BS4（微信）/ yt-dlp（视频）/ Twitter 降级 |
-| 阅读端 | Obsidian（桌面 obsidian-git / iOS Working Copy / Android MGit） |
+| 阅读端 | Obsidian + obsidian-git（桌面 SSH/HTTPS / Android HTTPS / iOS Working Copy SSH），详见 [docs/obsidian-git.md](docs/obsidian-git.md) |
 
-架构设计见 [docs/architecture.md](docs/architecture.md)，环境搭建见 [docs/setup.md](docs/setup.md)，待办见 [docs/todo.md](docs/todo.md)。
+架构设计见 [docs/architecture.md](docs/architecture.md)，环境搭建见 [docs/setup.md](docs/setup.md)，Obsidian 同步见 [docs/obsidian-git.md](docs/obsidian-git.md)，待办见 [docs/todo.md](docs/todo.md)。

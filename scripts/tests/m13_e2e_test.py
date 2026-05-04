@@ -16,7 +16,7 @@ SAMPLE_TEXT = (
     "知识库架构升级说明：\n"
     "本项目从「飞书主存储 + 多维表格索引」彻底切换为「ECS Vault 主存储 + 飞书只读镜像」。"
     "真相源是 ECS /opt/vault 目录下的 markdown 文件 + Git bare 仓库。"
-    "所有客户端（本机 Obsidian、手机 Working Copy / MGit）通过 SSH 与 /opt/vault-bare.git 同步，"
+    "所有客户端（桌面/手机 Obsidian + obsidian-git、iOS Working Copy）通过 SSH 或 HTTPS 与 /opt/vault-bare.git 同步，"
     "不依赖任何第三方 SaaS。飞书仅充当 IM 入口和云盘只读镜像端。"
     "检索改为本地 ripgrep 扫 Wiki/*.md，配合 YAML frontmatter 做元数据。"
 )

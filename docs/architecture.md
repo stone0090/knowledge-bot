@@ -5,7 +5,7 @@
 | 维度 | 选型 | 理由 |
 |------|------|------|
 | 存储 | ECS 本地 Vault（md + git） | 数据主权，零 SaaS 锁定；Obsidian 直接编辑；tar 即可迁移 |
-| Git 中央节点 | ECS 自建 bare 仓库 | 不经第三方托管；SSH 加密；每端完整副本 |
+| Git 中央节点 | ECS 自建 bare 仓库 | 不经第三方托管；SSH/HTTPS 双通道；每端完整副本 |
 | AI | 阿里云百炼（Qwen 系列） | 中文友好，费用可控 |
 | IM 入口 | 飞书自建机器人 | SDK 完善，手机端即时投喂 |
 | 阅读端 | Obsidian 跨端 + obsidian-git | 离线可读，git 同步 |
@@ -26,7 +26,7 @@
          ↓
 [ECS 存储层]
   /opt/vault/           工作副本（Raw/ + Wiki/ + SCHEMA.md）
-  /opt/vault-bare.git/  裸仓库（所有端 SSH clone）
+  /opt/vault-bare.git/  裸仓库（SSH 4500 或 HTTPS 4581 clone）
          ↓                              ↓
 [飞书云盘 镜像]                    [Obsidian 各端]
 ```
