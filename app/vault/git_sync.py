@@ -59,12 +59,33 @@ def commit_and_push(message: str) -> bool:
         return False
 
     rc, out, err = _run(["git", "push"], root)
+    if rc == 0:
+        logger.info("vault.git_sync: push 成功 - {}", message)
+        return True
+
+    # push 被 reject：bare 已有其他端（PC/手机）先 push 的 commit，
+    # 尝试 pull --rebase 一次再重试 push。冲突走 -X theirs 自动让本次 ingest 胜出。
+    logger.warning(
+        "vault.git_sync: 首次 push 失败，尝试 pull --rebase 再推 stderr={}", err
+    )
+    rc_r, out_r, err_r = _run(
+        ["git", "pull", "--rebase", "-X", "theirs"], root
+    )
+    if rc_r != 0:
+        logger.warning(
+            "vault.git_sync: pull --rebase 失败，放弃 push（commit 已落盘）stderr={}",
+            err_r,
+        )
+        _run(["git", "rebase", "--abort"], root)
+        return False
+
+    rc, out, err = _run(["git", "push"], root)
     if rc != 0:
         logger.warning(
-            "vault.git_sync: push 失败（commit 已落盘，稍后可手动 push）stderr={}",
+            "vault.git_sync: rebase 后 push 仍失败（commit 已落盘，稍后手动 push）stderr={}",
             err,
         )
         return False
 
-    logger.info("vault.git_sync: push 成功 - {}", message)
+    logger.info("vault.git_sync: rebase 后 push 成功 - {}", message)
     return True
