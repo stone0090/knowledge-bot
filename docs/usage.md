@@ -116,17 +116,25 @@ Obsidian 任一端直接手改 → `git push`。下次 `/lint` 会校验 frontma
 
 优先用 `/archive <标题>`（软删，可从 git 恢复）——这是符合 SCHEMA.md 约定的标准路径。
 
+**支持三种输入**（任选其一）：
+
 ```
-/archive LLM Wiki 模式
+/archive Hermes 技能实战体验              # 1. frontmatter.title（自然语言，含空格）
+/archive Hermes-技能实战体验              # 2. 文件名 stem（连字符 slug）
+/archive Raw/notes/20260504-001224-Hermes.md  # 3. Vault 相对路径（Wiki/开头或 Raw/开头）
 ```
+
+匹配规则：大小写不敏感，连字符/下划线/空格三者等价。
 
 动作：
 
-1. 找到 frontmatter.title 精确匹配的 Wiki 页，依据其 `sources` 字段一起处理 Raw 原文
+1. 找到 Wiki 页（或 Raw 路径反查回对应 Wiki 页），依据其 `sources` 字段一起处理 Raw 原文
 2. `Wiki/entities/xxx.md` → `_archive/Wiki/entities/xxx.md`（保持相对路径）
-3. `Raw/articles/yyy.md` → `_archive/Raw/articles/yyy.md`
+3. `Raw/notes/yyy.md` → `_archive/Raw/notes/yyy.md`
 4. `index.md` 移除 `[[标题]]` 条目，`log.md` 追加 `archived` 时间线
 5. `commit && push`；各端 Obsidian pull 后即不再看到（`_archive/` 不被 `/查` / `/lint` 扫描）
+
+如果 Raw 是孤儿文件（没有任何 Wiki 页的 `sources` 引用它），传 Raw 路径就会只处理该 Raw。
 
 确认永久丢弃用 `/del <标题>`：相同匹配逻辑，但是 **rm** 而非 mv。git history 依然能找回内容，但当前树纯净。
 
