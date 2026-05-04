@@ -142,7 +142,15 @@ Obsidian 任一端直接手改 → `git push`。下次 `/lint` 会校验 frontma
 
 ### 5.4 `/查` 的回填能关掉吗
 
-当前是默认开启且无开关。如果不想产生 query 归档，改代码暂不生效的部分在 [query.py](../app/handlers/query.py) 里的 `write_query` 块。未来会加飞书按钮"保存 / 不保存"。
+默认开启且无开关。但**回填已是后台异步**：飞书卡片在 LLM 答案生成后立即回复，`write_query` + `commit_and_push` 在后台进行，不阻塞主流程。你看到答案后约 1-3 秒，`index.md` 和 `Wiki/queries/` 才会更新。
+
+为什么保留这个机制：
+
+- **二次命中免 LLM**：同类问题再问时 ripgrep 会先在 `Wiki/queries/` 里命中旧答卷
+- **主题风向标**：每周看 `/lint` 报告时，被问得最多的主题就是下步要补的 Wiki 内容
+- **知识资产化**：问答本身也是一手素材，符合 Karpathy *compile once, query forever*
+
+如果真想关掉：编辑 [query.py](../app/handlers/query.py) 注掉 `asyncio.create_task(_persist_query(...))` 一行即可。未来会加飞书按钮「保存 / 不保存」。
 
 ### 5.5 新项目/重装怎么初始化 vault
 
