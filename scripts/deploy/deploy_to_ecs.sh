@@ -64,7 +64,9 @@ sync_code() {
             --exclude '*.pyc' \
             --exclude '.git/' \
             --exclude '.qoder/' \
-            --exclude 'scripts/tests/' \
+            --exclude 'scripts/tests/m*.py' \
+            --exclude 'scripts/tests/test_*.py' \
+            --exclude 'scripts/tests/__pycache__/' \
             --exclude 'docs/' \
             -e "ssh" \
             "$PROJECT_ROOT/" "$REMOTE:$REMOTE_APP_DIR/"
@@ -81,7 +83,9 @@ sync_code() {
             --exclude='*.pyc' \
             --exclude='.git' \
             --exclude='.qoder' \
-            --exclude='scripts/tests' \
+            --exclude='scripts/tests/m*.py' \
+            --exclude='scripts/tests/test_*.py' \
+            --exclude='scripts/tests/__pycache__' \
             --exclude='docs' \
             -C "$PROJECT_ROOT" .
         scp "$TMP_TAR" "$REMOTE:/tmp/_kb_deploy.tar.gz"
