@@ -18,13 +18,15 @@
 ## PC 端
 
 1. Obsidian → Settings → Community plugins → 搜 `Obsidian Git` → Install → Enable
-2. `Ctrl+P` → `Obsidian Git: Clone an existing remote repo`
-3. 按提示依次填：
+2. Settings → Obsidian Git → **Advanced** → `Custom base path`: `kb-vault`（插件识别 `.git` 必填）
+3. `Ctrl+P` → `Obsidian Git: Clone an existing remote repo`
+4. 按提示依次填：
    - Remote URL: `https://bot.shisb.com:4581/vault-bare.git`
    - Depth: 留空回车
    - Directory: `kb-vault`
    - "Vault is not empty": **Yes**
-4. Windows 凭据框弹出 → Username 填 `<USER>`，Password 填 `<TOKEN>`，勾选"记住"
+5. Windows 凭据框弹出 → Username 填 `<USER>`，Password 填 `<TOKEN>`，勾选"记住"
+6. Clone 完成后按 [推荐配置](#推荐配置) 补齐剩余字段
 
 > PC 版调用系统 git，走 Windows / macOS 凭据管理器，**插件设置里无需填 Auth**。
 
@@ -32,15 +34,18 @@
 
 1. 新建 vault `obsidian` 位置选 `/storage/emulated/0/Documents/`
 2. Settings → Community plugins → 搜 `Obsidian Git` → Install → Enable
-3. Settings → Obsidian Git → **Authentication/commit author**：
-   - Username on your git server: `<USER>`
-   - Password/Personal access token: `<TOKEN>`
+3. Settings → Obsidian Git 必填：
+   - **Authentication/commit author**：
+     - Username on your git server: `<USER>`
+     - Password/Personal access token: `<TOKEN>`
+   - **Advanced** → `Custom base path`: `kb-vault`（插件识别 `.git` 必填）
 4. 返回 vault → 命令面板 → `Obsidian Git: Clone an existing remote repo`
 5. 依次填：
    - Remote URL: `https://bot.shisb.com:4581/vault-bare.git`
    - Depth: 留空
    - Directory: `kb-vault`
    - "Vault is not empty": **Yes**
+6. Clone 完成后按 [推荐配置](#推荐配置) 补齐剩余字段
 
 > Android 版用 isomorphic-git（纯 JS），**凭据必须填在插件设置里**（URL 也可内嵌，但设置里填更稳）。
 
@@ -53,16 +58,23 @@
 | 查看历史 | `Obsidian Git: Show history view` |
 | 查看变更 | `Obsidian Git: Open Source Control View` |
 
-推荐配置（Settings → Obsidian Git）：
+## 推荐配置
+
+Settings → Obsidian Git：
 
 | 字段 | 推荐值 | 说明 |
 |---|---|---|
 | Auto save interval | `5` | 停止编辑 5 分钟自动 commit |
 | Auto push interval | `0` | 手动 push 更可控 |
 | Pull before push | `true` | 多端同步防冲突 |
+| Pull updates on startup | `true` | 打开 Obsidian 自动拉最新 |
 | Sync method | `merge` | 不 rebase，保留多端历史 |
-| Custom base path | `kb-vault` | 给插件指示 `.git` 位置，值与 clone 时的 Directory 保持一致 |
-| Custom Git directory path | 留空 | 此字段是本地 `.git` 路径，**不是 Remote URL** |
+| Commit message | PC: `vault backup (PC): {{date}}`<br/>Android: `vault backup (mobile): {{date}}` | 多端区分来源；`{{date}}` 按 Commit date format 渲染 |
+| Auto commit-and-sync message | 同 Commit message | 两者保持一致 |
+| Commit date format | `YYYY-MM-DD HH:mm:ss` | 渲染 `{{date}}` 占位符 |
+| List filenames affected by commit in the message body | `true` | commit body 列变更文件，history 可审查 |
+| Custom base path | `kb-vault` | 给插件指示 `.git` 位置，与 clone 时 Directory 一致（**必填**） |
+| Custom Git directory path | 留空 | 本地 `.git` 路径，**不是 Remote URL** |
 
 ## 常见坑
 
