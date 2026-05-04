@@ -22,7 +22,7 @@
 
 ## Entities
 
-- [[Hermes-技能实战体验]] — Hermes 技能实战体验笔记
+- [[Hermes 技能实战体验]] — Hermes 技能实战体验笔记
 
 ## Concepts
 

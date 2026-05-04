@@ -4,8 +4,7 @@ title: Hermes 技能实战体验
 aliases: [Hermes, Hermes Agent]
 created: 2026-05-04
 updated: 2026-05-04
-sources:
-  - Raw/notes/20260504-001224-Hermes-技能实战体验.md
+sources: [Raw/notes/20260504-001224-Hermes-技能实战体验.md]
 tags: [tool/agent, tool/hermes, meta/experience]
 confidence: medium
 ---
