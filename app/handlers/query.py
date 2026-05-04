@@ -7,24 +7,35 @@ from loguru import logger
 
 from app.feishu import get_feishu_client
 from app.llm import answer_question
-from app.vault import append_index, append_log, commit_and_push, search_wiki, write_query
+from app.vault import (
+    append_index,
+    append_log,
+    commit_and_push,
+    search_wiki,
+    vault_write_gate,
+    write_query,
+)
 
 from .cards import build_answer_card
 
 
 async def _persist_query(title_hint: str, answer: str, candidates: list) -> None:
-    """后台回填：写 query 文件 + 更新 index/log + git push。失败只记日志不影响主流程。"""
+    """后台回填：写 query 文件 + 更新 index/log + git push。失败只记日志不影响主流程。
+
+    共享 vault 写闸锁，与 ingest / cleanup 串行。用户不等后台回填，故不发排队提示。
+    """
     try:
         cand_paths = [c.get("path", "") for c in candidates if isinstance(c, dict)]
-        query_rel = await asyncio.to_thread(
-            write_query, title_hint, answer, cand_paths
-        )
-        title = title_hint[:40]
-        await asyncio.to_thread(append_index, "query", title, "")
-        await asyncio.to_thread(
-            append_log, "query", title, str(query_rel).replace("\\", "/")
-        )
-        await asyncio.to_thread(commit_and_push, f"query: {title}")
+        async with vault_write_gate.acquire():
+            query_rel = await asyncio.to_thread(
+                write_query, title_hint, answer, cand_paths
+            )
+            title = title_hint[:40]
+            await asyncio.to_thread(append_index, "query", title, "")
+            await asyncio.to_thread(
+                append_log, "query", title, str(query_rel).replace("\\", "/")
+            )
+            await asyncio.to_thread(commit_and_push, f"query: {title}")
         logger.info("query 后台回填完成: {}", query_rel)
     except Exception as exc:  # noqa: BLE001 - best-effort
         logger.warning("query 后台回填失败（不影响主流程）: {}", exc)

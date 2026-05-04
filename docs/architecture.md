@@ -80,5 +80,15 @@
 
 1. `/查 关键词` → ripgrep 扫 `Wiki/**/*.md` → Top-K 候选
 2. LLM 生成带引用回答
-3. 高质量答案可回填 `Wiki/queries/`
-4. 飞书蓝色卡片回复
+3. 飞书蓝色卡片回复（立即）
+4. 后台回填 `Wiki/queries/` + `index.md` + git push（异步，不阻塑主响应）
+
+## 并发控制（Vault 写闸锁）
+
+所有对 `/opt/vault` 的写入（ingest / query 回填 / cleanup）共享同一把 **全局 asyncio 锁**，位于 [app/vault/gate.py](../app/vault/gate.py) 的 `vault_write_gate` 单例。
+
+- **为什么需要**：并发任务共享 `.git/index.lock`、`index.md` / `log.md` 的 append、秒级时间戳文件名。不串行会碰锁、丢行、撞文件。
+- **临界段**：从读/写 md 到 `commit_and_push` 返回（LLM 调用在锁外）。
+- **排队提示**：调用方可传入 `on_queued` 回调，当前面有任务正在执行时，先给飞书用户折一条「⏳ 前方 N 个任务处理中」提示，再排队拿锁。
+- **降级心智**：锁不防 LLM 超时 / 网络超时 —— 那些在锁外运行。锁只保证 vault 写入自身的一致性。
+- **未来**：如果单用户演化为多用户 / 批量导入，可升级为 `asyncio.Queue` + worker 协程（可观测积压 + 优雅关停）。

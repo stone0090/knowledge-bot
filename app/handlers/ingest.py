@@ -12,7 +12,14 @@ from app.llm import compile_knowledge
 from app.parsers import parse_any
 from app.parsers.dispatcher import ParsedContent
 from app.parsers.url_reader import FetchError
-from app.vault import append_log, append_index, commit_and_push, write_raw, write_wiki
+from app.vault import (
+    append_log,
+    append_index,
+    commit_and_push,
+    vault_write_gate,
+    write_raw,
+    write_wiki,
+)
 
 from .cards import build_ingest_card
 
@@ -51,38 +58,43 @@ async def ingest(*, text: str | None = None, file: tuple[bytes, str] | None = No
             await client.reply_text(reply_message_id, "抱歉，未解析到有效内容。")
         return {"ok": False, "reason": "empty"}
 
-    # 2. 归纳（LLM）
+    # 2. 归纳（LLM）——在锁外执行，避免 LLM 超时挂住闸道
     card = await compile_knowledge(parsed.text)
 
-    # 3. 写 Vault（真相源：Raw 原文 + Wiki 编译产物）
+    # 3-4. 写 Vault + git push（共享 vault 写闸锁，排队时先提示用户）
     wiki_markdown = card.to_markdown(parsed.source_ref)
-    raw_rel: Path = await asyncio.to_thread(
-        write_raw,
-        card.title,
-        parsed.source_type,
-        parsed.source_ref,
-        parsed.text,
-    )
-    wiki_rel: Path = await asyncio.to_thread(
-        write_wiki,
-        type=card.type,
-        title=card.title,
-        tags=card.tags,
-        summary=card.summary,
-        source_ref=str(raw_rel).replace("\\", "/"),
-        body_markdown=wiki_markdown,
-        aliases=card.aliases,
-        confidence=card.confidence,
-    )
 
-    # 3b. 更新 index.md / log.md
-    await asyncio.to_thread(append_index, card.type, card.title, card.summary)
-    await asyncio.to_thread(append_log, card.type, card.title, str(wiki_rel).replace("\\", "/"))
+    async def _notify_queued(ahead: int) -> None:
+        if reply_message_id:
+            await client.reply_text(
+                reply_message_id,
+                f"⏳ 前方还有 {ahead} 个任务处理中，收到的内容已排队…",
+            )
 
-    # 4. Git commit + push（best-effort，失败仅告警）
-    await asyncio.to_thread(commit_and_push, f"ingest: {card.title}")
+    async with vault_write_gate.acquire(on_queued=_notify_queued):
+        raw_rel: Path = await asyncio.to_thread(
+            write_raw,
+            card.title,
+            parsed.source_type,
+            parsed.source_ref,
+            parsed.text,
+        )
+        wiki_rel: Path = await asyncio.to_thread(
+            write_wiki,
+            type=card.type,
+            title=card.title,
+            tags=card.tags,
+            summary=card.summary,
+            source_ref=str(raw_rel).replace("\\", "/"),
+            body_markdown=wiki_markdown,
+            aliases=card.aliases,
+            confidence=card.confidence,
+        )
+        await asyncio.to_thread(append_index, card.type, card.title, card.summary)
+        await asyncio.to_thread(append_log, card.type, card.title, str(wiki_rel).replace("\\", "/"))
+        await asyncio.to_thread(commit_and_push, f"ingest: {card.title}")
 
-    # 5. 飞书镜像（best-effort）
+    # 5. 飞书镜像（best-effort，锁外）
     mirror_url = await _mirror_to_feishu(card.title, wiki_markdown)
 
     # 6. 回复卡片

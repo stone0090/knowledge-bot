@@ -26,6 +26,7 @@ from app.vault import (
     commit_and_push,
     remove_from_index,
     split_frontmatter,
+    vault_write_gate,
 )
 
 
@@ -331,8 +332,16 @@ async def _cleanup_and_reply(title: str, *, mode: str, reply_message_id: str) ->
             f"用法：`/{verb} <Wiki 标题 | 文件名 | Vault 相对路径>`",
         )
         return
+
+    async def _notify_queued(ahead: int) -> None:
+        await client.reply_text(
+            reply_message_id,
+            f"⏳ 前方还有 {ahead} 个任务处理中，你的 /{mode} 已排队…",
+        )
+
     try:
-        result = await asyncio.to_thread(_do_cleanup, title, mode)
+        async with vault_write_gate.acquire(on_queued=_notify_queued):
+            result = await asyncio.to_thread(_do_cleanup, title, mode)
     except Exception as exc:
         logger.exception("cleanup failed: {}", exc)
         await client.reply_text(reply_message_id, f"{mode} 失败: {exc}")
