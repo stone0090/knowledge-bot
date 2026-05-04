@@ -14,9 +14,12 @@ from app.vault.lint import format_lint_report
 
 from .ingest import ingest
 from .query import query
+from .cleanup import handle_archive, handle_delete
 
 QUERY_PREFIXES = ("/查", "/q", "/search")
 LINT_PREFIXES = ("/lint",)
+DELETE_PREFIXES = ("/delete", "/del")
+ARCHIVE_PREFIXES = ("/archive",)
 
 
 def _extract_text(message: dict[str, Any]) -> str:
@@ -89,6 +92,14 @@ async def _handle_message(event: dict[str, Any]) -> None:
             logger.exception("lint failed: {}", exc)
             report = f"Lint 失败: {exc}"
         await client.reply_text(message_id, report)
+        return
+
+    if any(text.startswith(p) for p in ARCHIVE_PREFIXES):
+        await handle_archive(text, reply_message_id=message_id)
+        return
+
+    if any(text.startswith(p) for p in DELETE_PREFIXES):
+        await handle_delete(text, reply_message_id=message_id)
         return
 
     if any(text.startswith(p) for p in QUERY_PREFIXES):

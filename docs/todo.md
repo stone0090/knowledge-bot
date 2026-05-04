@@ -9,6 +9,7 @@
 - [ ] **M9b** `writer.py` 按 type 分路径 + 新 frontmatter（type/created/updated/sources/confidence/contested）
 - [ ] **M9c** `indexer.py` 自动维护 `index.md` / `log.md`（每次 ingest 追加）
 - [ ] **M9d** `lint.py` + 飞书 `/lint` 命令（孤儿页、frontmatter 缺失、stale 检测）
+- [x] **清理** `/archive <标题>` 软删 + `/del <标题>` 硬删（同步处理 Raw 原文、index/log）
 
 ## 二期
 

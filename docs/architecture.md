@@ -37,6 +37,7 @@
 |----|------|------|
 | Raw | `Raw/{articles,notes,files,transcripts,papers,assets}/` | 原始来源，LLM 只读不改 |
 | Wiki | `Wiki/{entities,concepts,comparisons,queries}/` | LLM 编译产物，自动维护 |
+| 归档 | `_archive/`（vault 根） | `/archive` 的软删目的地；不被 `/查` / `/lint` / 飞书镜像扫描，但留在 git 里 |
 | 索引 | `index.md` + `log.md`（vault 根） | 全量导航 + 最近变更时间线 |
 | SCHEMA | `SCHEMA.md`（vault 根） | 人机契约：页面命名、模板、标签、处理流程（参考 [vault-seed/schema-template.md](vault-seed/schema-template.md)） |
 

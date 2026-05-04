@@ -4,13 +4,15 @@
 
 ## 总览
 
-knowledge-bot 在飞书里提供 **3 种命令** + **1 种默认行为**：
+knowledge-bot 在飞书里提供 **5 种命令** + **1 种默认行为**：
 
 | 动作 | 触发 | 效果 |
 |------|------|------|
 | 投喂（ingest） | 直接发送文本 / URL / 文件 | 解析 → LLM 编译 → 写入 Vault → Git push → 飞书镜像 |
 | 检索（query） | `/查 <问题>` 或 `/q` / `/search` | ripgrep 扫 Wiki → LLM 生成带引用回答 → 自动回填 `Wiki/queries/` |
 | 体检（lint） | `/lint` | 扫描 Wiki 全量，报告 frontmatter/孤儿页/遗留字段问题 |
+| 归档（archive） | `/archive <标题>` | Wiki 页 + Raw 原文 mv 到 `_archive/`，从 index 移除（可恢复） |
+| 删除（delete） | `/del <标题>` 或 `/delete` | 硬删 Wiki 页 + Raw 原文（不可恢复，仅 git history 有） |
 
 所有写入都自动 `git commit && git push`，多端 Obsidian 下一次 pull 即可看到。
 
@@ -109,6 +111,26 @@ Vault 是 git 仓库，Obsidian Git 插件做同步，详见 [obsidian-git.md](o
 ### 5.3 Wiki 页生成得不对，怎么改
 
 Obsidian 任一端直接手改 → `git push`。下次 `/lint` 会校验 frontmatter 是否仍合规。红绿灯原则下这是**红灯**范畴：核心事实以人写入为准，LLM 不覆盖。
+
+### 5.3a 数据不对想删除
+
+优先用 `/archive <标题>`（软删，可从 git 恢复）——这是符合 SCHEMA.md 约定的标准路径。
+
+```
+/archive LLM Wiki 模式
+```
+
+动作：
+
+1. 找到 frontmatter.title 精确匹配的 Wiki 页，依据其 `sources` 字段一起处理 Raw 原文
+2. `Wiki/entities/xxx.md` → `_archive/Wiki/entities/xxx.md`（保持相对路径）
+3. `Raw/articles/yyy.md` → `_archive/Raw/articles/yyy.md`
+4. `index.md` 移除 `[[标题]]` 条目，`log.md` 追加 `archived` 时间线
+5. `commit && push`；各端 Obsidian pull 后即不再看到（`_archive/` 不被 `/查` / `/lint` 扫描）
+
+确认永久丢弃用 `/del <标题>`：相同匹配逻辑，但是 **rm** 而非 mv。git history 依然能找回内容，但当前树纯净。
+
+批量处理：连续发几条 `/del xxx` / `/archive yyy` 即可，没有一次性多选，避免误杀。
 
 ### 5.4 `/查` 的回填能关掉吗
 

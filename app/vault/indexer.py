@@ -131,3 +131,25 @@ def append_log(type: str, title: str, wiki_path: str) -> None:
 
     path.write_text("\n".join(lines) + "\n", encoding="utf-8")
     logger.info("indexer.append_log -> {} ({})", title, type)
+
+
+def remove_from_index(title: str) -> bool:
+    """从 index.md 中删除含 `[[title]]` 的条目行。
+
+    任意包含 `[[title]]` 的整行都会被移除（包括重复条目）。
+    返回是否实际删除了至少一行。
+    """
+    path = _vault_root() / "index.md"
+    if not path.exists():
+        return False
+    text = path.read_text(encoding="utf-8")
+    needle = f"[[{title}]]"
+    if needle not in text:
+        return False
+    lines = text.splitlines()
+    kept = [ln for ln in lines if needle not in ln]
+    if len(kept) == len(lines):
+        return False
+    path.write_text("\n".join(kept) + "\n", encoding="utf-8")
+    logger.info("indexer.remove_from_index -> {}", title)
+    return True
