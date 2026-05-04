@@ -38,7 +38,7 @@
 | Raw | `Raw/{articles,notes,files,transcripts,papers,assets}/` | 原始来源，LLM 只读不改 |
 | Wiki | `Wiki/{entities,concepts,comparisons,queries}/` | LLM 编译产物，自动维护 |
 | 索引 | `index.md` + `log.md`（vault 根） | 全量导航 + 最近变更时间线 |
-| SCHEMA | `SCHEMA.md`（vault 根） | 人机契约：页面命名、模板、标签、处理流程（参考 [schema-template.md](schema-template.md)） |
+| SCHEMA | `SCHEMA.md`（vault 根） | 人机契约：页面命名、模板、标签、处理流程（参考 [vault-seed/schema-template.md](vault-seed/schema-template.md)） |
 
 - **检索**：ripgrep 扫 `Wiki/**/*.md` frontmatter + 正文，毫秒级。元数据随 md 走，无外部数据库。
 - **飞书镜像**：仅 Wiki 编译产物转 docx 推云盘，best-effort，失败仅告警。

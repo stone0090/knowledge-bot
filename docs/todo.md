@@ -1,6 +1,6 @@
 # 待办
 
-> 方法论：[llm-wiki-method.md](llm-wiki-method.md) · 运行契约：ECS `/opt/vault/SCHEMA.md`（参考 [schema-template.md](schema-template.md)）
+> 方法论：[llm-wiki-method.md](llm-wiki-method.md) · 运行契约：ECS `/opt/vault/SCHEMA.md`（参考 [vault-seed/schema-template.md](vault-seed/schema-template.md)）
 
 ## 一期剩余（LLM Wiki 重构）
 
