@@ -15,7 +15,7 @@ from .frontmatter import split_frontmatter
 # SCHEMA.md 规定的必填字段
 _REQUIRED = ["type", "title", "created", "updated", "sources", "tags"]
 # 允许的 type 值
-_ALLOWED_TYPES = {"entity", "concept", "comparison", "query"}
+_ALLOWED_TYPES = {"entity", "concept", "comparison", "query", "skill"}
 
 
 def _vault_root() -> Path:

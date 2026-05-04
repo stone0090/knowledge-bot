@@ -18,6 +18,7 @@ _TYPE_HEADING = {
     "concept": "## Concepts",
     "comparison": "## Comparisons",
     "query": "## Queries",
+    "skill": "## Skills",
 }
 
 _INDEX_TEMPLATE = """# Wiki 索引
@@ -31,6 +32,8 @@ _INDEX_TEMPLATE = """# Wiki 索引
 ## Comparisons
 
 ## Queries
+
+## Skills
 """
 
 _LOG_TEMPLATE = """# 变更日志

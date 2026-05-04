@@ -17,6 +17,7 @@
   - `concepts/`     概念页（方法论 / 原则 / 术语）
   - `comparisons/`  对比页（横向对照）
   - `queries/`      `/查` 固化页
+  - `skills/`       AI Agent 直读的技能脚本（`/skill` 命令沉淀）
 - `SCHEMA.md`    人机契约（命名 / 模板 / 标签 / 流程）
 - `log.md`       最近变更时间线
 
@@ -33,5 +34,9 @@ _（待建）_
 _（待建）_
 
 ## Queries
+
+_（待建）_
+
+## Skills
 
 _（待建）_

@@ -22,6 +22,7 @@ _TYPE_TO_SUBDIR = {
     "concept": "concepts",
     "comparison": "comparisons",
     "query": "queries",
+    "skill": "skills",
 }
 
 _SLUG_STRIP = re.compile(r'[\\/:*?"<>|\r\n\t]+')
@@ -115,6 +116,49 @@ def write_wiki(
     _ensure_dir(path)
     path.write_text(content, encoding="utf-8")
     logger.info("vault.write_wiki -> {} (type={})", path, type)
+    return path.relative_to(root)
+
+
+def write_skill(
+    *,
+    title: str,
+    name: str,
+    description: str,
+    tags: list[str],
+    summary: str,
+    source_ref: str,
+    body_markdown: str,
+    confidence: str = "medium",
+) -> Path:
+    """写入 Wiki/skills/<name>.md；frontmatter 同时满足 Vault + agent 双契约。
+
+    - 文件名用 `name`（agent slug），而非 title slug，保证拷到 `.qoder/skills/` 后
+      agent 匹配的 name 与文件名一致。
+    - `description` 必须英文 `Use when…` 句式，由 LLM 负责。
+    """
+    root = _vault_root()
+    sub = _TYPE_TO_SUBDIR["skill"]
+    filename = f"{name or _slugify(title)}.md"
+    path = root / "Wiki" / sub / filename
+
+    today = date.today().isoformat()
+    meta: dict = {
+        "type": "skill",
+        "title": title,
+        "name": name,
+        "description": description,
+        "tags": tags,
+        "created": today,
+        "updated": today,
+        "sources": [source_ref] if source_ref else [],
+        "confidence": confidence,
+    }
+    body = body_markdown if body_markdown.endswith("\n") else body_markdown + "\n"
+    content = dump_frontmatter(meta) + "\n" + body
+
+    _ensure_dir(path)
+    path.write_text(content, encoding="utf-8")
+    logger.info("vault.write_skill -> {} (name={})", path, name)
     return path.relative_to(root)
 
 

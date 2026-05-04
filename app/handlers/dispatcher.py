@@ -20,6 +20,7 @@ QUERY_PREFIXES = ("/查", "/q", "/search")
 LINT_PREFIXES = ("/lint",)
 DELETE_PREFIXES = ("/delete", "/del")
 ARCHIVE_PREFIXES = ("/archive",)
+SKILL_PREFIXES = ("/skill", "/sk")
 
 
 def _extract_text(message: dict[str, Any]) -> str:
@@ -105,6 +106,29 @@ async def _handle_message(event: dict[str, Any]) -> None:
     if any(text.startswith(p) for p in QUERY_PREFIXES):
         await query(text, reply_message_id=message_id)
         return
+
+    # /skill 分支：剥前缀后走 ingest(as_skill=True)
+    for pref in SKILL_PREFIXES:
+        if text.startswith(pref):
+            payload = text[len(pref):].strip()
+            if not payload:
+                await client.reply_text(
+                    message_id,
+                    "用法：`/skill <URL>` 或 `/skill <文本片段>`\n"
+                    "作用：精炼为 agent-ready skill → Wiki/skills/\n"
+                    "用时手工拷到 `.qoder/skills/` 或 `.claude/skills/`\u3002",
+                )
+                return
+            await client.reply_text(message_id, "收到，正在精炼为 skill…")
+            try:
+                await ingest(text=payload, reply_message_id=message_id, as_skill=True)
+            except FetchError as exc:
+                logger.warning("/skill 抓取失败: {}", exc.reason)
+                await client.reply_text(message_id, exc.user_hint)
+            except Exception as exc:
+                logger.exception("/skill failed: {}", exc)
+                await client.reply_text(message_id, f"skill 精炼失败: {exc}")
+            return
 
     # 默认当作投喂
     await client.reply_text(message_id, "收到，正在整理…")

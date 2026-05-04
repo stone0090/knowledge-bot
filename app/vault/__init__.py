@@ -5,7 +5,7 @@ from .git_sync import commit_and_push
 from .indexer import append_index, append_log, remove_from_index
 from .lint import lint_vault
 from .search import search_wiki
-from .writer import write_query, write_raw, write_wiki
+from .writer import write_query, write_raw, write_skill, write_wiki
 
 __all__ = [
     "dump_frontmatter",
@@ -20,5 +20,6 @@ __all__ = [
     "search_wiki",
     "write_query",
     "write_raw",
+    "write_skill",
     "write_wiki",
 ]
