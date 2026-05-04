@@ -220,6 +220,17 @@ restart_service() {
     fi
 }
 
+# ---------- 回归测试 ----------
+run_regression() {
+    log "运行回归测试（纯离线、无副作用）"
+    if remote "cd ${REMOTE_APP_DIR} && .venv/bin/python scripts/tests/regression.py"; then
+        echo "✅ 回归测试全部通过"
+    else
+        warn "回归测试有失败，请核对上方输出"
+        return 1
+    fi
+}
+
 # ---------- 查看状态 ----------
 show_status() {
     log "服务状态"
@@ -267,10 +278,14 @@ case "${1:-full}" in
         sync_code
         setup_venv
         restart_service
-        echo "✅ 代码更新完成，服务已重启"
+        run_regression
+        echo "✅ 代码更新完成，服务已重启，回归测试已通过"
         ;;
     restart)
         restart_service
+        ;;
+    regression)
+        run_regression
         ;;
     status)
         show_status
@@ -279,12 +294,13 @@ case "${1:-full}" in
         follow_logs
         ;;
     *)
-        echo "用法: $0 {full|update|restart|status|logs}"
-        echo "  full     全量部署（首次使用）"
-        echo "  update   同步代码+依赖+重启"
-        echo "  restart  仅重启服务"
-        echo "  status   查看服务状态与日志"
-        echo "  logs     实时跟踪日志"
+        echo "用法: $0 {full|update|restart|regression|status|logs}"
+        echo "  full        全量部署（首次使用）"
+        echo "  update      同步代码+依赖+重启+回归测试"
+        echo "  restart     仅重启服务"
+        echo "  regression  只跑回归测试"
+        echo "  status      查看服务状态与日志"
+        echo "  logs        实时跟踪日志"
         exit 1
         ;;
 esac

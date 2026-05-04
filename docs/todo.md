@@ -2,15 +2,7 @@
 
 > 方法论：[llm-wiki-method.md](llm-wiki-method.md) · 运行契约：ECS `/opt/vault/SCHEMA.md`（参考 [vault-seed/schema-template.md](vault-seed/schema-template.md)）
 
-## 一期剩余（LLM Wiki 重构）
-
-- [ ] **M10** `/查` 结果一键保存到 `Wiki/queries/`（卡片「保存到 Wiki」按钮）
-- [ ] **M9a** `compile.py` 按 `type`（entity / concept）分路 System Prompt
-- [ ] **M9b** `writer.py` 按 type 分路径 + 新 frontmatter（type/created/updated/sources/confidence/contested）
-- [ ] **M9c** `indexer.py` 自动维护 `index.md` / `log.md`（每次 ingest 追加）
-- [ ] **M9d** `lint.py` + 飞书 `/lint` 命令（孤儿页、frontmatter 缺失、stale 检测）
-- [x] **清理** `/archive <标题>` 软删 + `/del <标题>` 硬删（同步处理 Raw 原文、index/log）
-- [x] **Skill 沉淀** `/skill <URL|片段>` 精炼为 agent-ready skill → `Wiki/skills/`（手工拷到 `.qoder/skills/` / `.claude/skills/`）
+一期 LLM Wiki 重构已全部交付✅：`compile.py` 分路 / `writer.py` 新 frontmatter / `indexer.py` 自动维护 / `lint.py` + `/lint` / `/archive` + `/del` / `/skill` 沉淀。
 
 ## 二期
 
@@ -26,3 +18,4 @@
 ## 优化项
 
 - [ ] 检索关键词抽取（当前 `/查` 把整句当 keyword，命中率低）
+- [ ] `/查` 回填 “保留 / 丢弃” 飞书按钮（当前默认异步保留，无 UI 开关）
