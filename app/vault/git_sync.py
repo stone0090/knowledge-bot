@@ -40,7 +40,7 @@ def commit_and_push(message: str) -> bool:
 
     _ensure_git_identity(root)
 
-    rc, _, _ = _run(["git", "add", "."], root)
+    rc, _, _ = _run(["git", "add", "-A"], root)
     if rc != 0:
         logger.warning("vault.git_sync: git add 失败")
         return False
