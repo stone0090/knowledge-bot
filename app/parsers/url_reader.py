@@ -2,6 +2,7 @@
 
 策略路由表：
   mp.weixin.qq.com       → 内置 HTTP + BeautifulSoup（微信反爬需模拟浏览器 UA）
+  xiaohongshu / xhslink  → 移动分享页结构化数据（正文 + 全部图片链接）
   youtube / youtu.be     → yt-dlp（字幕提取）
   bilibili / b23.tv      → yt-dlp（字幕提取）
   x.com / twitter.com    → Jina Reader 尝试 + 降级提示
@@ -16,6 +17,7 @@ import shutil
 import tempfile
 from pathlib import Path
 from typing import Callable, Awaitable
+from urllib.parse import urlsplit
 
 import httpx
 from bs4 import BeautifulSoup
@@ -206,6 +208,96 @@ async def _fetch_wechat(url: str) -> str:
 
 
 # ---------------------------------------------------------------------------
+# 策略：小红书（分享页内嵌数据，保留图文）
+# ---------------------------------------------------------------------------
+
+_XHS_HEADERS = {
+    "User-Agent": (
+        "Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) "
+        "AppleWebKit/605.1.15 Version/17.0 Mobile/15E148 Safari/604.1"
+    ),
+}
+
+
+def _parse_xiaohongshu(html: str, source: str, page_url: str) -> str:
+    """只读取目标笔记的数据，不执行网页脚本或混入推荐图片。"""
+    soup = BeautifulSoup(html, "html.parser")
+    state = None
+    for script in soup.find_all("script"):
+        match = re.search(r"window\.__INITIAL_STATE__\s*=\s*", script.get_text())
+        if not match:
+            continue
+        raw = script.get_text()[match.end():]
+        # JS 状态含 undefined；保留字符串里的同名文字，用 JSON 解码而非 eval。
+        raw = re.sub(r'"(?:\\.|[^"\\])*"|\bundefined\b',
+                     lambda m: "null" if m[0] == "undefined" else m[0], raw)
+        try:
+            state = json.JSONDecoder().raw_decode(raw)[0]
+        except ValueError:
+            continue
+        break
+
+    match = re.search(r"/(?:explore|discovery/item)/([a-f0-9]+)", urlsplit(page_url).path)
+    note_id = match[1] if match else None
+    note = None
+    if isinstance(state, dict) and note_id:
+        mobile = state.get("noteData", {}).get("data", {}).get("noteData", {})
+        desktop = state.get("note", {}).get("noteDetailMap", {}).get(note_id, {}).get("note", {})
+        for candidate in (mobile, desktop):
+            if isinstance(candidate, dict) and candidate.get("noteId") == note_id:
+                note = candidate
+                break
+    if not note:
+        raise ValueError("未找到目标小红书笔记数据")
+
+    images = []
+    for item in note.get("imageList", []):
+        variants = item.get("infoList") or []
+        candidates = [item.get("urlDefault"), *[
+            v.get("url") for v in variants if v.get("imageScene") in ("WB_DFT", "H5_DTL")
+        ], item.get("url")]
+        for candidate in candidates:
+            if not isinstance(candidate, str):
+                continue
+            if candidate.startswith("//"):
+                candidate = "https:" + candidate
+            if candidate.startswith("http://"):
+                candidate = "https://" + candidate[len("http://"):]
+            if urlsplit(candidate).scheme == "https" and urlsplit(candidate).hostname:
+                if candidate not in images:
+                    images.append(candidate)
+                break
+
+    parts = [f"# {note.get('title') or '小红书笔记'}", "", f"**来源**: {source}", "",
+             note.get("desc") or ""]
+    if images:
+        parts += ["", f"## 笔记图片（{len(images)} 张）", ""]
+        for index, image_url in enumerate(images, 1):
+            image_url = image_url.replace("<", "%3C").replace(">", "%3E")
+            parts += [f"![图片 {index}](<{image_url}>)", "",
+                      f"[图片 {index} 链接](<{image_url}>)", ""]
+    else:
+        parts += ["", "（未提取到笔记图片，请打开原链接查看。）"]
+    if not images and not (note.get("desc") or "").strip():
+        raise ValueError("小红书笔记正文和图片均为空")
+    return "\n".join(parts)
+
+
+async def _fetch_xiaohongshu(url: str) -> str:
+    try:
+        async with httpx.AsyncClient(
+            timeout=30.0, follow_redirects=True, proxy=_httpx_proxy(),
+        ) as client:
+            response = await client.get(url, headers=_XHS_HEADERS)
+            response.raise_for_status()
+        return _parse_xiaohongshu(response.text, url, str(response.url))
+    except (httpx.HTTPError, ValueError, TypeError, AttributeError) as exc:
+        logger.warning("小红书图文提取失败，回退正文抓取: {}", type(exc).__name__)
+        text = await _fetch_jina(url)
+        return text + "\n\n> 小红书图片未能完整提取，请打开原链接查看图片。\n"
+
+
+# ---------------------------------------------------------------------------
 # 策略：yt-dlp（视频字幕提取）
 # ---------------------------------------------------------------------------
 
@@ -364,6 +456,7 @@ async def _fetch_twitter(url: str) -> str:
 # ---------------------------------------------------------------------------
 
 _ROUTE_TABLE: list[tuple[re.Pattern, Callable[[str], Awaitable[str]]]] = [
+    (re.compile(r"(?:^|\.)(?:xiaohongshu\.com|xhslink\.(?:com|cn))$"), _fetch_xiaohongshu),
     (re.compile(r"mp\.weixin\.qq\.com"),                 _fetch_wechat),
     (re.compile(r"(youtube\.com|youtu\.be)"),             _fetch_video_subtitle),
     (re.compile(r"(bilibili\.com|b23\.tv|bili\d+\.cn)"),  _fetch_video_subtitle),
@@ -374,7 +467,7 @@ _ROUTE_TABLE: list[tuple[re.Pattern, Callable[[str], Awaitable[str]]]] = [
 async def fetch_url_as_markdown(url: str) -> str:
     """按域名路由到最佳抓取策略，带质量检测。"""
     for pattern, handler in _ROUTE_TABLE:
-        if pattern.search(url):
+        if pattern.search(urlsplit(url).hostname or ""):
             logger.info("URL 路由: {} → {}", url[:80], handler.__name__)
             return await handler(url)
     # 兜底：Jina Reader
