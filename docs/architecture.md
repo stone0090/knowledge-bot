@@ -1,94 +1,32 @@
-# 架构设计
+# 架构（简化版）
 
-## 核心决策
+飞书事件 → 校验（已配置的 token / 发送者白名单）→ SQLite 持久化收集队列 → 单 worker → 保存 Raw → 解析/编译 → 写入 Wiki → Git 同步 → 飞书消息预览。
 
-| 维度 | 选型 | 理由 |
-|------|------|------|
-| 存储 | ECS 本地 Vault（md + git） | 数据主权，零 SaaS 锁定；Obsidian 直接编辑；tar 即可迁移 |
-| Git 中央节点 | ECS 自建 bare 仓库 | 不经第三方托管；SSH/HTTPS 双通道；每端完整副本 |
-| AI | 阿里云百炼（Qwen 系列） | 中文友好，费用可控 |
-| IM 入口 | 飞书自建机器人 | SDK 完善，手机端即时投喂 |
-| 阅读端 | Obsidian 跨端 + obsidian-git | 离线可读，git 同步 |
-| 飞书角色 | 只读镜像（best-effort） | 备用阅读入口，失败不阻断 |
-| 方法论 | LLM Wiki 三层 + 红绿灯原则 | Raw 只读、SCHEMA 当契约、人机分三档，详见 [llm-wiki-method.md](llm-wiki-method.md) |
+## 状态与恢复
 
-## 系统架构
+队列在 Vault 之外，事件落盘后才向飞书返回成功。message_id 为幂等键；处理中断的任务在启动时恢复。原文保存在模型调用之前。模型/抓取有限自动重试，支持手动重试；已生成 Wiki 的任务只重试 Git，不重新调用模型。
 
-```
-[用户] → 飞书发送 URL / 文本 / 文件
-         ↓ webhook
-[FastAPI 后端（ECS）]
-  ├─ 抓取层    按域名路由（见「URL 抓取分层」）
-  ├─ 编译层    按 SCHEMA.md 抽实体/概念 → Wiki 页
-  ├─ LLM       阿里云百炼 · OpenAI 兼容协议
-  ├─ Vault     写 md + frontmatter → git commit/push
-  └─ 飞书 API  IM 收发 + 云盘 docx 镜像（best-effort）
-         ↓
-[ECS 存储层]
-  /opt/vault/           工作副本（Raw/ + Wiki/ + SCHEMA.md）
-  /opt/vault-bare.git/  裸仓库（SSH 4500 或 HTTPS 4581 clone）
-         ↓                              ↓
-[飞书云盘 镜像]                    [Obsidian 各端]
-```
+回复投递与业务处理分开：业务完成后若飞书 API 失败，继续尝试回复，不重新生成笔记。远端已收到但本地尚未记账时，回复在极小窗口内可能重复，业务文件仍保持幂等。
 
-## 知识组织：LLM Wiki 三层
+## 存储
 
-| 层 | 路径 | 角色 |
-|----|------|------|
-| Raw | `Raw/{articles,notes,files,transcripts,papers,assets}/` | 原始来源，LLM 只读不改 |
-| Wiki | `Wiki/{entities,concepts,comparisons,queries,skills}/` | LLM 编译产物，自动维护；`skills/` 存放 agent-ready 技能脚本，用时手工拷到 `.qoder/skills/` 或 `.claude/skills/` |
-| 归档 | `_archive/`（vault 根） | `/archive` 的软删目的地；不被 `/查` / `/lint` / 飞书镜像扫描，但留在 git 里 |
-| 索引 | `index.md` + `log.md`（vault 根） | 全量导航 + 最近变更时间线 |
-| SCHEMA | `SCHEMA.md`（vault 根） | 人机契约：页面命名、模板、标签、处理流程（参考 [vault-seed/schema-template.md](vault-seed/schema-template.md)） |
+- Raw：原始消息和提取正文。
+- Wiki：普通笔记，用内容指纹区分不同内容，已有内容只读复用，不覆盖人工编辑。
+- _archive：历史内容保留，不参与默认检索。
+- STATE_PATH：SQLite 状态、解析缓存、原始上传文件、进程锁。须持久化、限制本机访问权限，不提交 Git。
 
-- **检索**：ripgrep 扫 `Wiki/**/*.md` frontmatter + 正文，毫秒级。元数据随 md 走，无外部数据库。
-- **飞书镜像**：仅 Wiki 编译产物转 docx 推云盘，best-effort，失败仅告警。
+不再维护运行用的 index.md/log.md/SCHEMA.md，不生成飞书云盘镜像。
 
-### 红绿灯原则
+## Git
 
-| 等级 | 策略 | 示例 |
-|------|------|------|
-| 🟢 绿灯 | 全托管 LLM | 摘要、索引、链接补全、孤儿页检查 |
-| 🟡 黄灯 | 人机共审 | 矛盾裁决、概念合并、过时作废 |
-| 🔴 红灯 | 绝不外包 | 核心事实写入、价值判断 |
+只提交当前任务涉及的文件；其他本地改动不会被自动打包。先 fetch，再普通 merge，最后 push，不使用 rebase -X theirs 或强推。冲突时 abort 合并，保持两端提交并报告待处理。无新文件的任务也可重新尝试尚未完成的同步。
 
-## URL 抓取分层
+## 查询
 
-| 分层 | 工具 | 覆盖 | 状态 |
-|------|------|------|------|
-| 通用网页 | Jina AI Reader | 90% 网页、GitHub、博客 | ✅ |
-| 微信公众号 | 内置 httpx + BeautifulSoup | 永久链 `/s/*` | ✅ |
-| 视频字幕 | yt-dlp | YouTube / B站 / 1800+ 站 | ✅ |
-| Twitter/X | Jina Reader + 降级提示 | best-effort | ✅ |
-| 结构化文件 | markitdown | PDF / PPT / Excel / Word | 二期 |
-| 登录态平台 | Cookie / Playwright | 小红书 / LinkedIn | 按需 |
+仅查询当前 VAULT_PATH 的 Raw 和 Wiki。标题、标签、别名和正文词项加权，中文使用双字切分，返回实际命中的正文片段。没有外部向量数据库，也不产生手机端索引文件。回答不自动入库；只有用户显式保存才生成笔记。
 
-失败统一抛 `FetchError`，飞书卡片提示"请复制正文发送"。域名路由：`url_reader.py` 按正则自动分发。
+## 边界
 
-## 工作流
+当前运行模式要求单 worker 进程。未配置 FEISHU_VERIFICATION_TOKEN 时只沿用原有回调行为并记录警告，不能宣称已校验消息来源。加密事件暂不支持。外部附件解析和公开网页抓取受依赖、认证与站点限制，失败任务仍可恢复。
 
-### 投喂（Ingest）
-
-1. 飞书发送 URL / 文本 → 抓取层拿纯文本
-2. 原文写入 `Raw/{articles|notes|transcripts|files}/`（LLM 永不修改）
-3. LLM 按 SCHEMA.md 分类型编译 → `Wiki/{entities,concepts}/*.md` + 更新 `index.md` / `log.md`
-4. `git commit && git push` → bare 仓库
-5. 飞书镜像 Wiki → docx（best-effort）
-6. 飞书卡片回复
-
-### 检索（Query）
-
-1. `/查 关键词` → ripgrep 扫 `Wiki/**/*.md` → Top-K 候选
-2. LLM 生成带引用回答
-3. 飞书蓝色卡片回复（立即）
-4. 后台回填 `Wiki/queries/` + `index.md` + git push（异步，不阻塑主响应）
-
-## 并发控制（Vault 写闸锁）
-
-所有对 `/opt/vault` 的写入（ingest / query 回填 / cleanup）共享同一把 **全局 asyncio 锁**，位于 [app/vault/gate.py](../app/vault/gate.py) 的 `vault_write_gate` 单例。
-
-- **为什么需要**：并发任务共享 `.git/index.lock`、`index.md` / `log.md` 的 append、秒级时间戳文件名。不串行会碰锁、丢行、撞文件。
-- **临界段**：从读/写 md 到 `commit_and_push` 返回（LLM 调用在锁外）。
-- **排队提示**：调用方可传入 `on_queued` 回调，当前面有任务正在执行时，先给飞书用户折一条「⏳ 前方 N 个任务处理中」提示，再排队拿锁。
-- **降级心智**：锁不防 LLM 超时 / 网络超时 —— 那些在锁外运行。锁只保证 vault 写入自身的一致性。
-- **未来**：如果单用户演化为多用户 / 批量导入，可升级为 `asyncio.Queue` + worker 协程（可观测积压 + 优雅关停）。
+分类由库根目录 `分类规则.md` 管理，新内容自动归类；规则修改经 Git 同步后生效。新 Wiki 文件名为可读标题，Raw 按收藏年月存放。历史目录不随规则变更自动移动。

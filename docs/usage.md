@@ -1,215 +1,35 @@
-# 使用手册
+# 使用说明
 
-> 面向最终用户（自己/家人/团队）的飞书机器人使用指南。方法论见 [llm-wiki-method.md](llm-wiki-method.md)，架构见 [architecture.md](architecture.md)。
+## 收藏
 
-## 总览
+向飞书机器人发送文章链接、文字、文件或图片。链接后可以补充自己的备注，备注原样保留在生成的笔记中。一次链接消息抓取第一个 URL，其余文字作为备注。
 
-knowledge-bot 在飞书里提供 **6 种命令** + **1 种默认行为**：
+消息先进入持久队列，原始记录先于模型保存。成功后直接在飞书看到 Wiki 预览、保存位置和 Git 同步状态，不再创建飞书云文档。长预览会截短，全文在 Obsidian 查看。
 
-| 动作 | 触发 | 效果 |
-|------|------|------|
-| 投喂（ingest） | 直接发送文本 / URL / 文件 | 解析 → LLM 编译 → 写入 Vault → Git push → 飞书镜像 |
-| 检索（query） | `/查 <问题>` 或 `/q` / `/search` | ripgrep 扫 Wiki → LLM 生成带引用回答 → 自动回填 `Wiki/queries/` |
-| 体检（lint） | `/lint` | 扫描 Wiki 全量，报告 frontmatter/孤儿页/遗留字段问题 |
-| 归档（archive） | `/archive <标题>` | Wiki 页 + Raw 原文 mv 到 `_archive/`，从 index 移除（可恢复） |
-| 删除（delete） | `/del <标题>` 或 `/delete` | 硬删 Wiki 页 + Raw 原文（不可恢复，仅 git history 有） |
-| 技能沉淀（skill） | `/skill <URL>` 或 `/skill <文本片段>` | LLM 精炼为 agent-ready skill → `Wiki/skills/`，用时手动拷到 `.qoder/skills/` 或 `.claude/skills/` |
+模型或抓取失败时自动有限重试；最终失败会给出任务编号。发送 `/重试` 或 `/重试 任务编号` 可继续。Git 暂时失败则在服务器保留文件并后台重试，回复不会冒称已同步。发生冲突会保留两端内容、暂停同步，需要解决冲突后再重试。
 
-所有写入都自动 `git commit && git push`，多端 Obsidian 下一次 pull 即可看到。
+重复消息按 message_id 去重；不同消息中内容与备注相同，复用已有 Wiki。原始收集记录保留。修改过的 Wiki 不被重新生成覆盖；相同标题但不同来源/内容生成独立文件。
 
-## 1. 投喂（Ingest）
+## 查询与保存
 
-### 1.1 直接发文本
+`/查 问题` 搜索当前库的原文和 Wiki，返回相关片段支撑的回答，不扫描其他个人库，不自动保存问答。检索采用词项匹配和相关性排序，不是向量检索，换成完全不同的同义词仍可能漏召回。
 
-飞书对话框粘贴任意一段文字：
+`/保存` 将最近一次有来源的回答保存为笔记，或 `/保存 任务编号` 指定本会话的一次查询。历史自动生成问答已归档，默认不作为检索证据。
 
-```
-最近读到一个观点：LLM Wiki 的核心不是检索，而是"每次 ingest 前都重读 SCHEMA.md"……
-```
+`/状态` 查看本会话最近任务；也可指定编号。
 
-机器人会：
+## 管理
 
-1. `Raw/notes/<时间戳>-<标题>.md` 保存原文（frontmatter: `source_type=text, source_ref=inline, ingested=...`）
-2. LLM 按 SCHEMA.md 编译为 **entity** 或 **concept** 页 → `Wiki/entities/` 或 `Wiki/concepts/`
-3. `index.md` / `log.md` 自动追加条目
-4. 飞书卡片回复标题、摘要、Vault 相对路径
+在 Obsidian 里编辑、删除、归档笔记并正常推送 Git。机器人不再提供 `/del`、`/archive`、`/skill`、`/lint`。已有专题与技能内容仍保留，不要求重新分类。
 
-### 1.2 发送 URL
+运行队列、缓存、原始附件位于服务器 STATE_PATH，不会复制到手机。文件解析仍依赖可选 markitdown 及对应格式依赖；未安装时原始文件保存在服务器待重试，不代表正文已成功提取。
 
-支持通用网页、微信公众号 `/s/*`、YouTube/B站字幕、Twitter/X（降级）。只发链接即可：
+查询前会刷新 Git，因此 Obsidian 已推送的修改可被检索。刷新失败时会明确提示回答使用服务器现有版本。
 
-```
-https://mp.weixin.qq.com/s/xxxxxxxxx
-```
+## 分类与文件名
 
-失败时卡片会提示"请复制正文发送"。
+在库根目录维护 `分类规则.md`，示例见 `docs/templates/分类规则.md`。每个分类用二级标题和 `- 目录：Wiki/分类名`，随后描述收录、排除范围。机器人每次收藏先刷新 Git，再读取文件，将分类说明与素材一起交给模型。只有文档里允许的目录能作为归类结果；规则错误、Git 刷新失败或无法确定分类时进入 `Wiki/待整理`，不阻塞保存。
 
-### 1.3 发送文件
+修改规则并推送后下一条收藏生效，无需重启。规则只用于新收藏，不自动搬动已有笔记。目录不存在时首次写入才创建。
 
-Word / PPT / Excel / PDF（二期 markitdown）。当前一期仅 URL + 文本。
-
-### 1.4 技能沉淀（`/skill`）
-
-特殊投喂系列：把一段原文 / 片段精炼成 **agent 直读的 skill md**，存入 `Wiki/skills/`。要用的时候手动拷到当前项目的 `.qoder/skills/` 或 `.claude/skills/` 即可，无自动同步。
-
-两种输入：
-
-```
-# A. URL（拓后 LLM 从原文抽要段）
-/skill https://www.anthropic.com/news/claude-skills
-
-# B. 文本片段（直接精炼）
-/skill
-要对接 Ghostty，先 brew install --cask ghostty，
-然后把 ~/.config/ghostty/config 写：theme = catppuccin-mocha…
-```
-
-行为：
-
-1. `Raw/` 保存原文（URL 走 articles/，纯文本走 notes/）
-2. LLM 按 Skill 模板编译：提取 `name`（slug）、`description`（英文“Use when…”句式的 agent 激活条件）、以及 **Prerequisites / Steps / Verify / Common Pitfalls / Notes** 五段正文
-3. 写入 `Wiki/skills/<slug>.md`，frontmatter 同时包含 `type: skill` + `name` + `description`
-4. `index.md` / `log.md` 追加
-
-使用示例：
-
-```bash
-# PC 端用 Qoder / Claude Code 时，手动拷这段 skill 到当前项目
-cp ~/obsidian/knowledge-vault/Wiki/skills/ghostty-quick-start.md .qoder/skills/
-# 或整项目
-cp ~/obsidian/knowledge-vault/Wiki/skills/ghostty-quick-start.md .claude/skills/
-```
-
-拷过去后 agent 即识别 `description` 文本自动激活。`/del <slug>` / `/archive <slug>` 同样适用于 skill 页。
-
-## 2. 检索（Query）
-
-### 2.1 命令格式
-
-```
-/查 什么是 LLM Wiki 的红绿灯原则
-/q hermes agent
-/search 2026 LLM benchmark
-```
-
-### 2.2 行为
-
-1. 对 vault 的 `Wiki/**/*.md` 做 ripgrep 关键词召回（Top-5）
-2. 调用 qwen 生成带引用答案
-3. 自动写入 `Wiki/queries/<时间戳>-<问题slug>.md`（frontmatter type=query）
-4. 飞书蓝色卡片回复，附 Vault 路径
-
-### 2.3 为什么要回填
-
-`/查` 的问题往往反映真实检索动机。固化到 Wiki/queries/ 后：
-
-- 同类问题二次发问，ripgrep 可直接命中历史答卷
-- lint 周报能看到"被问得最多的主题"→ 倒推补哪块内容
-- 是 LLM Wiki "Compile once, query forever" 的关键闭环
-
-## 3. 体检（Lint）
-
-```
-/lint
-```
-
-机器人扫一遍 `Wiki/**/*.md`，按类别分组报告问题：
-
-- **缺 frontmatter**：md 开头不是 `---`
-- **必填字段缺失**：type / title / created / updated / sources / tags 其一为空
-- **type 值非法**：不在 `{entity, concept, comparison, query, skill}`
-- **遗留旧版字段**：存在 `area` / `summary` / `source_ref` / `created_at`（方法论切换前的字段）
-- **孤儿页**：页面 title 未在 `index.md` 出现
-
-问题超过 10 条的类别会折叠显示。lint 只读不改，可随时触发。
-
-## 4. 跨端阅读
-
-Vault 是 git 仓库，Obsidian Git 插件做同步，详见 [obsidian-git.md](obsidian-git.md)：
-
-- **PC（桌面）**：SSH (port 4500) 或 HTTPS (port 4581)
-- **Android**：obsidian-git + HTTPS
-- **iOS**：Working Copy + SSH
-
-每次投喂成功后，各端 `pull` 一下即可看到新页。推荐开启插件的 `autoPullOnBoot` + `autoPull interval`。
-
-## 5. 常见问题
-
-### 5.1 我发了 URL 但回复"请复制正文发送"
-
-抓取层失败（登录态、反爬、CDN 403）。按提示从网页复制正文直接粘贴到飞书，机器人会当普通文本处理。
-
-### 5.2 同一篇文章二次投喂会重复吗
-
-当前一期会重复写 Raw（时间戳不同），但 Wiki 页会被同 slug 覆盖更新。二期会基于 `sha256` 做 drift 检测，内容一致则跳过编译。
-
-### 5.3 Wiki 页生成得不对，怎么改
-
-Obsidian 任一端直接手改 → `git push`。下次 `/lint` 会校验 frontmatter 是否仍合规。红绿灯原则下这是**红灯**范畴：核心事实以人写入为准，LLM 不覆盖。
-
-### 5.3a 数据不对想删除
-
-优先用 `/archive <标题>`（软删，可从 git 恢复）——这是符合 SCHEMA.md 约定的标准路径。
-
-**支持三种输入**（任选其一）：
-
-```
-/archive Hermes 技能实战体验              # 1. frontmatter.title（自然语言，含空格）
-/archive Hermes-技能实战体验              # 2. 文件名 stem（连字符 slug）
-/archive Raw/notes/20260504-001224-Hermes.md  # 3. Vault 相对路径（Wiki/开头或 Raw/开头）
-```
-
-匹配规则：大小写不敏感，连字符/下划线/空格三者等价。
-
-动作：
-
-1. 找到 Wiki 页（或 Raw 路径反查回对应 Wiki 页），依据其 `sources` 字段一起处理 Raw 原文
-2. `Wiki/entities/xxx.md` → `_archive/Wiki/entities/xxx.md`（保持相对路径）
-3. `Raw/notes/yyy.md` → `_archive/Raw/notes/yyy.md`
-4. `index.md` 移除 `[[标题]]` 条目，`log.md` 追加 `archived` 时间线
-5. `commit && push`；各端 Obsidian pull 后即不再看到（`_archive/` 不被 `/查` / `/lint` 扫描）
-
-如果 Raw 是孤儿文件（没有任何 Wiki 页的 `sources` 引用它），传 Raw 路径就会只处理该 Raw。
-
-确认永久丢弃用 `/del <标题>`：相同匹配逻辑，但是 **rm** 而非 mv。git history 依然能找回内容，但当前树纯净。
-
-批量处理：连续发几条 `/del xxx` / `/archive yyy` 即可，没有一次性多选，避免误杀。
-
-### 5.4 `/查` 的回填能关掉吗
-
-默认开启且无开关。但**回填已是后台异步**：飞书卡片在 LLM 答案生成后立即回复，`write_query` + `commit_and_push` 在后台进行，不阻塞主流程。你看到答案后约 1-3 秒，`index.md` 和 `Wiki/queries/` 才会更新。
-
-为什么保留这个机制：
-
-- **二次命中免 LLM**：同类问题再问时 ripgrep 会先在 `Wiki/queries/` 里命中旧答卷
-- **主题风向标**：每周看 `/lint` 报告时，被问得最多的主题就是下步要补的 Wiki 内容
-- **知识资产化**：问答本身也是一手素材，符合 Karpathy *compile once, query forever*
-
-如果真想关掉：编辑 [query.py](../app/handlers/query.py) 注掉 `asyncio.create_task(_persist_query(...))` 一行即可。未来会加飞书按钮「保存 / 不保存」。
-
-### 5.4a 为什么有时收到「⏳ 前方 N 个任务处理中」
-
-所有 Vault 写入（ingest / `/del` / `/archive` / `/查` 后台回填）共享一把全局锁，避免 git / index.md 竞争。当你发命令时前面已有其他任务在写，会先收到这条排队提示（后续拿到锁会继续正常流程）。
-
-- **仅在前方有任务时才提示**。空闲时直接跳过。
-- **`/查` 不会发排队提示**：它的主回复已经是立即的，后台回填排队与否用户无感知。
-- **排队中的任务默认不会超时丢弃**；LLM / 网络超时在锁外第一步就有保护，不会挂住闸道。
-
-### 5.5 新项目/重装怎么初始化 vault
-
-```bash
-# 1. 把 docs/vault-seed/ 下 4 个模板推到裸仓库的工作副本
-scp docs/vault-seed/{schema-template.md,index.md,log.md} <ecs>:/opt/vault/
-#    （schema-template.md 重命名为 SCHEMA.md）
-# 2. 按需把 sample-entity.md 当参考（不强制）
-# 3. git init bare + ECS bootstrap，见 scripts/deploy/ecs_bootstrap_vault.sh
-```
-
-## 6. 红绿灯速查
-
-| 场景 | 归属 | 操作 |
-|------|------|------|
-| 每天发 5 篇文章攒素材 | 🟢 机器 | 飞书粘贴即可 |
-| `/查` 出来的答案不对 | 🟡 人机 | 手动修 `Wiki/queries/<...>.md` + push |
-| 两篇 Wiki 页结论冲突 | 🟡 人机 | 任一页加 `contradictions` 字段，lint 报，人来裁 |
-| 要不要新建 entity 页 | 🔴 人 | 参考 SCHEMA.md §Page Thresholds（2+ 来源建页） |
+新 Wiki 使用 `Wiki/分类/主题标题.md`；原文使用 `Raw/YYYY/MM/主题标题.md`，年月为收藏时间。内部 ID 和内容 hash 保留在属性，不出现在文件名。未整理成功的原文先使用消息摘要或“网页收藏”作为临时标题，成功后更名并更新来源链接。同名但不同内容使用 `（2）` 等序号，已有内容不覆盖；重复收藏仍复用原 Wiki。明确保存的查询回答放入 `Wiki/待整理`。

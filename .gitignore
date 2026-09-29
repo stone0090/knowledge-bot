@@ -10,3 +10,14 @@ venv/
 .vscode/
 tmp/
 *.log
+
+# Local credentials, runtime state and backups
+.env.*
+!.env.example
+*.pem
+*.key
+*.p12
+*.pfx
+*.sqlite3
+*.sqlite3-*
+backups/

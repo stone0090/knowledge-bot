@@ -1,21 +1,12 @@
-# 待办
+# 后续事项
 
-> 方法论：[llm-wiki-method.md](llm-wiki-method.md) · 运行契约：ECS `/opt/vault/SCHEMA.md`（参考 [vault-seed/schema-template.md](vault-seed/schema-template.md)）
+简化版已实现持久收集、任务恢复、去重、保留人工修改、Git 状态反馈、原文检索及按需保存问答。
 
-一期 LLM Wiki 重构已全部交付✅：`compile.py` 分路 / `writer.py` 新 frontmatter / `indexer.py` 自动维护 / `lint.py` + `/lint` / `/archive` + `/del` / `/skill` 沉淀。
+待根据实际使用验证：
+- 飞书移动端长卡片阅读体验。
+- 公开站点抓取成功率与解析质量。
+- 中文词项检索的漏召回情况，再决定是否增加语义检索。
+- 配置回调 verification token 与发送者白名单。
+- 原始附件的长期外部存储策略；当前仅存服务器 STATE_PATH，不自动上传坚果云。
 
-## 二期
-
-- [ ] **M4** PDF / PPT / Excel / Word / 图片 OCR（markitdown + `im:resource` 权限）
-- [ ] **M6** Wiki 双向链接 `[[wikilink]]`
-- [ ] **M8** 多模态智能路由（按场景选模，让预留的模型变量生效）
-
-## 三期
-
-- [ ] **M11** RSS / Reddit / Exa 语义搜索
-- [ ] **M12** 飞书周报（基于 log.md 自动汇总）
-
-## 优化项
-
-- [ ] 检索关键词抽取（当前 `/查` 把整句当 keyword，命中率低）
-- [ ] `/查` 回填 “保留 / 丢弃” 飞书按钮（当前默认异步保留，无 UI 开关）
+不继续扩展：云盘镜像、自动问答归档、全量目录流水、飞书侧删除/归档命令。

@@ -5,11 +5,11 @@ description: Connect to and operate the project's CentOS 7.6 ECS server that hos
 
 # ECS Access
 
-This project uses a single ECS (Aliyun, CentOS 7.6, IP `121.196.26.127`, SSH port `4500`) as the Git bare server for the Vault. A local SSH alias `kb` has been configured via `scripts/setup_ssh_keyless.sh`.
+This project uses a single ECS (Aliyun, CentOS 7.6, IP `203.0.113.10`, SSH port `4500`) as the Git bare server for the Vault. A local SSH alias `kb` has been configured via `scripts/setup_ssh_keyless.sh`.
 
 ## Golden rule
 
-**Always use the `kb` alias.** Never write the full `ssh -p 4500 root@121.196.26.127` form in commands, scripts, docs, or suggestions.
+**Always use the `kb` alias.** Never write the full `ssh -p 4500 root@203.0.113.10` form in commands, scripts, docs, or suggestions.
 
 ```bash
 ssh kb                                    # interactive login
@@ -22,7 +22,7 @@ The alias is defined in the user's `~/.ssh/config`:
 
 ```
 Host kb
-    HostName 121.196.26.127
+    HostName 203.0.113.10
     Port 4500
     User root
     IdentityFile ~/.ssh/id_ed25519
@@ -122,7 +122,7 @@ ssh kb 'cd /opt/vault && rg -n --glob "Wiki/**/*.md" "<keyword>"'
 ### Clone the vault to a new client (desktop / phone Working Copy / MGit)
 
 ```
-Host:      kb   (or 121.196.26.127 port 4500)
+Host:      kb   (or 203.0.113.10 port 4500)
 User:      root
 Path:      /opt/vault-bare.git
 Auth:      SSH key (same ed25519 as the local machine, or a new key appended to ~/.ssh/authorized_keys)
@@ -149,7 +149,7 @@ git config --unset http.proxy
 
 ## Anti-patterns
 
-- ❌ `ssh -p 4500 root@121.196.26.127 ...` — use `ssh kb ...`.
+- ❌ `ssh -p 4500 root@203.0.113.10 ...` — use `ssh kb ...`.
 - ❌ `git -C /opt/vault ...` on the server — use `cd /opt/vault && git ...`.
 - ❌ `git init --bare -b main ...` on the server — fix HEAD explicitly with `symbolic-ref`.
 - ❌ `yum install ripgrep` — not available on CentOS 7; use the static binary.

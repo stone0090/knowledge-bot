@@ -6,11 +6,11 @@
 
 | 项 | 值 |
 |---|---|
-| Remote URL | `https://bot.shisb.com:4581/vault-bare.git` |
+| Remote URL | `https://bot.example.com:4581/vault-bare.git` |
 | Username | （向 ECS 管理员索取，下称 `<USER>`） |
 | Token (PAT) | （同上，下称 `<TOKEN>`） |
 
-- URL **必须用域名**，不要用 IP。证书 CN 为 `bot.shisb.com`，IP 访问会 SSL 校验失败。
+- URL **必须用域名**，不要用 IP。证书 CN 为 `bot.example.com`，IP 访问会 SSL 校验失败。
 - 服务端 nginx + git-http-backend + htpasswd 配置、安全组 4581 放行：见 ECS 运维文档。
 - 仓库已强制 `.obsidian/` 不进 git（每台设备独立配置）。
 - **Vault 布局推荐**：vault 根放 Obsidian 插件配置，子目录 `kb-vault/` 放 Git 仓库。这样 clone 不会覆盖 vault 根的 `.obsidian/`。Obsidian Git 设置里 `Custom base path (Git repository path)` 需设为 `kb-vault`（插件以此定位 `.git`）。
@@ -21,7 +21,7 @@
 2. Settings → Obsidian Git → **Advanced** → `Custom base path`: `kb-vault`（插件识别 `.git` 必填）
 3. `Ctrl+P` → `Obsidian Git: Clone an existing remote repo`
 4. 按提示依次填：
-   - Remote URL: `https://bot.shisb.com:4581/vault-bare.git`
+   - Remote URL: `https://bot.example.com:4581/vault-bare.git`
    - Depth: 留空回车
    - Directory: `kb-vault`
    - "Vault is not empty": **Yes**
@@ -41,7 +41,7 @@
    - **Advanced** → `Custom base path`: `kb-vault`（插件识别 `.git` 必填）
 4. 返回 vault → 命令面板 → `Obsidian Git: Clone an existing remote repo`
 5. 依次填：
-   - Remote URL: `https://bot.shisb.com:4581/vault-bare.git`
+   - Remote URL: `https://bot.example.com:4581/vault-bare.git`
    - Depth: 留空
    - Directory: `kb-vault`
    - "Vault is not empty": **Yes**
@@ -80,12 +80,12 @@ Settings → Obsidian Git：
 
 | 症状 | 原因 | 解法 |
 |------|------|------|
-| `fatal: unable to access … SSL certificate problem` | URL 用了 IP | 改用 `bot.shisb.com` 域名 |
+| `fatal: unable to access … SSL certificate problem` | URL 用了 IP | 改用 `bot.example.com` 域名 |
 | `To avoid conflicts, .obsidian needs to be deleted` | 远程历史曾包含 `.obsidian/` | ECS 端 `git rm -r --cached .obsidian/` + `.gitignore` 加 `.obsidian/` + push |
 | Android "Git is not ready" 不消失 | Clone 未真正成功 | 从命令面板重跑 Clone，不要点工具栏的 push/pull（那是 clone 完之后才用的） |
 | Android 设置里 `gitDir` 被误填成 URL | 字段含义误解 | 清空 Advanced → `Custom Git directory path` |
 | Termux 里 `curl/git` 报 `ngtcp2_crypto_*` | libcurl 与依赖版本不匹配 | `pkg upgrade -y` 或 `pkg install --reinstall libcurl libngtcp2` |
-| 401 Unauthorized | Token 错/过期/用户名错 | 重新索取凭据；Windows 凭据管理器删掉旧条目 `git:https://bot.shisb.com` |
+| 401 Unauthorized | Token 错/过期/用户名错 | 重新索取凭据；Windows 凭据管理器删掉旧条目 `git:https://bot.example.com` |
 
 ## 相关文档
 

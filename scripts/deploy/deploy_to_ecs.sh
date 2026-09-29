@@ -40,7 +40,7 @@ preflight() {
         || err "无法连接 $REMOTE，请先运行 bash scripts/deploy/setup_ssh_keyless.sh"
 
     # .env.secrets 存在
-    [ -f "$PROJECT_ROOT/envs/.env.secrets" ] || err "找不到 $PROJECT_ROOT/envs/.env.secrets，请先复制 .env.secrets.example 并填入密钥"
+    # Code updates preserve all remote environment and secret files.
 
     # 远端 Python 3.10
     remote "$PYTHON_BIN --version" 2>/dev/null \
@@ -57,6 +57,7 @@ sync_code() {
     # 优先用 rsync（增量同步快），本机没装则 fallback 到 tar+scp
     if command -v rsync >/dev/null 2>&1; then
         rsync -avz --delete \
+            --exclude 'envs/' \
             --exclude '.env' \
             --exclude '.env.secrets' \
             --exclude '.venv/' \
@@ -65,7 +66,6 @@ sync_code() {
             --exclude '.git/' \
             --exclude '.qoder/' \
             --exclude 'scripts/tests/m*.py' \
-            --exclude 'scripts/tests/test_*.py' \
             --exclude 'scripts/tests/__pycache__/' \
             --exclude 'docs/' \
             -e "ssh" \
@@ -76,6 +76,7 @@ sync_code() {
         TMP_TAR="$(mktemp -t kb-deploy-XXXX.tar.gz)"
         # 在项目根目录打 tar（排除不需要的目录）
         tar czf "$TMP_TAR" \
+            --exclude='envs' \
             --exclude='.env' \
             --exclude='.env.secrets' \
             --exclude='.venv' \
@@ -84,7 +85,6 @@ sync_code() {
             --exclude='.git' \
             --exclude='.qoder' \
             --exclude='scripts/tests/m*.py' \
-            --exclude='scripts/tests/test_*.py' \
             --exclude='scripts/tests/__pycache__' \
             --exclude='docs' \
             -C "$PROJECT_ROOT" .
@@ -98,7 +98,10 @@ sync_code() {
 # ---------- 2. 上传配置文件 ----------
 sync_env() {
     log "[2/5] 上传环境配置 + 密钥"
-    # envs/ecs.env 已随代码同步，只需上传密钥文件
+    # Initial full deployment only; updates must never replace working remote credentials.
+    [ -f "$PROJECT_ROOT/envs/.env.secrets" ] || err "缺少本地密钥文件"
+    remote "mkdir -p $REMOTE_APP_DIR/envs"
+    scp "$PROJECT_ROOT/envs/ecs.env" "$REMOTE:$REMOTE_APP_DIR/envs/ecs.env"
     scp "$PROJECT_ROOT/envs/.env.secrets" "$REMOTE:$REMOTE_APP_DIR/envs/.env.secrets"
     remote "chmod 600 $REMOTE_APP_DIR/envs/.env.secrets"
     echo "✅ 密钥文件已上传并设置权限"
@@ -164,7 +167,7 @@ setup_nginx() {
 # knowledge-bot HTTP (9000) + HTTPS (9443)
 server {
     listen 9000;
-    server_name bot.shisb.com;
+    server_name bot.example.com;
 
     location /healthz {
         proxy_pass http://127.0.0.1:8000/healthz;
@@ -183,10 +186,10 @@ server {
 
 server {
     listen 9443 ssl;
-    server_name bot.shisb.com;
+    server_name bot.example.com;
 
-    ssl_certificate     /etc/nginx/ssl/bot.shisb.com.pem;
-    ssl_certificate_key /etc/nginx/ssl/bot.shisb.com.key;
+    ssl_certificate     /etc/nginx/ssl/bot.example.com.pem;
+    ssl_certificate_key /etc/nginx/ssl/bot.example.com.key;
     ssl_protocols       TLSv1.2 TLSv1.3;
     ssl_ciphers         HIGH:!aNULL:!MD5;
 
@@ -227,7 +230,7 @@ restart_service() {
 # ---------- 回归测试 ----------
 run_regression() {
     log "运行回归测试（纯离线、无副作用）"
-    if remote "cd ${REMOTE_APP_DIR} && .venv/bin/python scripts/tests/regression.py"; then
+    if remote "cd ${REMOTE_APP_DIR} && .venv/bin/python -m unittest scripts.tests.test_simplified -v"; then
         echo "✅ 回归测试全部通过"
     else
         warn "回归测试有失败，请核对上方输出"

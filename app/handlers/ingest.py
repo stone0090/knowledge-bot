@@ -1,150 +1,83 @@
-"""投喂流程：原始素材 → Vault（主）→ Git push → 飞书镜像（best-effort）。"""
+"""Collect first, compile second. No Drive mirror, index or operation-log writes."""
 from __future__ import annotations
-
 import asyncio
+from datetime import datetime
 from pathlib import Path
-
-from loguru import logger
-
-from app.config import settings
+from app.jobs import state_root
 from app.feishu import get_feishu_client
-from app.llm import compile_knowledge, compile_skill
 from app.parsers import parse_any
-from app.parsers.dispatcher import ParsedContent
-from app.parsers.url_reader import FetchError
-from app.vault import (
-    append_log,
-    append_index,
-    commit_and_push,
-    vault_write_gate,
-    write_raw,
-    write_skill,
-    write_wiki,
-)
-
-from .cards import build_ingest_card
+from app.llm import compile_knowledge
+from app.vault.collection import save_received,save_extracted,save_page,digest,find_content,rename_source
+from app.vault.git_sync import sync_vault
+from app.vault.gate import vault_write_gate
 
 
-async def _mirror_to_feishu(title: str, markdown: str) -> str | None:
-    """best-effort：把 Wiki md 镜像为飞书 docx；失败仅告警不中断主流程。"""
-    folder_token = settings.feishu_mirror_folder_token
-    if not folder_token:
-        logger.info("未配置 FEISHU_MIRROR_FOLDER_TOKEN，跳过飞书镜像")
-        return None
-    try:
-        client = get_feishu_client()
-        doc = await client.create_docx(folder_token, title)
-        await client.append_docx_text(doc["document_id"], markdown)
-        return doc["url"]
-    except Exception as exc:  # noqa: BLE001 - best-effort
-        logger.warning("飞书镜像失败（不影响主流程）: {}", exc)
-        return None
-
-
-async def ingest(*, text: str | None = None, file: tuple[bytes, str] | None = None,
-                 reply_message_id: str | None = None, as_skill: bool = False) -> dict:
-    """执行完整投喂流程，返回结果字典。
-
-    as_skill=True 时走 compile_skill + write_skill，产出 agent-ready 技能页；
-    其余流程（解析 / Raw / index / log / push / 镜像 / 卡片）与普通 ingest 一致。
-    """
-    client = get_feishu_client()
-
-    # 1. 解析
-    try:
-        parsed: ParsedContent = await parse_any(text=text, file=file)
-    except FetchError as exc:
-        logger.warning("抓取失败: {}", exc.reason)
-        if reply_message_id:
-            await client.reply_text(reply_message_id, exc.user_hint)
-        return {"ok": False, "reason": exc.reason}
-    if not parsed.text.strip():
-        if reply_message_id:
-            await client.reply_text(reply_message_id, "抱歉，未解析到有效内容。")
-        return {"ok": False, "reason": "empty"}
-
-    # 2. 归纳（LLM）——在锁外执行，避免 LLM 超时挂住闸道
-    if as_skill:
-        skill_card = await compile_skill(parsed.text)
-        card_title = skill_card.title
-        card_tags = skill_card.tags
-        card_summary = skill_card.summary
-        card_type = "skill"
-        wiki_markdown = skill_card.to_markdown(parsed.source_ref)
+async def collect(job, inbox):
+    jid=job['id'];payload=job['payload'];result=dict(job['result'])
+    # After a push failure/restart, use durable artifacts instead of paying for regeneration.
+    if result.get('wiki_path'):
+        return result
+    text=payload.get('text','');file=payload.get('file')
+    received=text if not file else '附件：'+file['name']
+    if not result.get('wiki_path'):
+        async with vault_write_gate.acquire():
+            from app.parsers.dispatcher import URL_PATTERN
+            match=URL_PATTERN.search(text)
+            source=file["name"] if file else match.group(0) if match else "inline"
+            raw=await asyncio.to_thread(save_received,jid,received,source)
+            result['raw_path']=raw
+            inbox.update(jid,result=result)
+            await asyncio.to_thread(sync_vault,'collect: '+jid,[raw])
+    cache=state_root()/'parsed'/ (jid+'.json')
+    import json
+    if cache.exists():
+        data=json.loads(cache.read_text())
     else:
-        card = await compile_knowledge(parsed.text)
-        card_title = card.title
-        card_tags = card.tags
-        card_summary = card.summary
-        card_type = card.type
-        wiki_markdown = card.to_markdown(parsed.source_ref)
-
-    # 3-4. 写 Vault + git push（共享 vault 写闸锁，排队时先提示用户）
-    async def _notify_queued(ahead: int) -> None:
-        if reply_message_id:
-            await client.reply_text(
-                reply_message_id,
-                f"⏳ 前方还有 {ahead} 个任务处理中，收到的内容已排队…",
-            )
-
-    async with vault_write_gate.acquire(on_queued=_notify_queued):
-        raw_rel: Path = await asyncio.to_thread(
-            write_raw,
-            card_title,
-            parsed.source_type,
-            parsed.source_ref,
-            parsed.text,
-        )
-        if as_skill:
-            wiki_rel: Path = await asyncio.to_thread(
-                write_skill,
-                title=skill_card.title,
-                name=skill_card.name,
-                description=skill_card.description,
-                tags=skill_card.tags,
-                summary=skill_card.summary,
-                source_ref=str(raw_rel).replace("\\", "/"),
-                body_markdown=wiki_markdown,
-                confidence=skill_card.confidence,
-            )
+        if file:
+            binary=state_root()/'uploads'/jid
+            if not binary.exists():
+                raw_bytes=await get_feishu_client().download_message_file(job['message_id'],file['key'],file['type'])
+                binary.parent.mkdir(parents=True,exist_ok=True)
+                binary.write_bytes(raw_bytes);binary.chmod(0o600)
+            parsed=await parse_any(file=(binary.read_bytes(),file['name']))
         else:
-            wiki_rel = await asyncio.to_thread(
-                write_wiki,
-                type=card.type,
-                title=card.title,
-                tags=card.tags,
-                summary=card.summary,
-                source_ref=str(raw_rel).replace("\\", "/"),
-                body_markdown=wiki_markdown,
-                aliases=card.aliases,
-                confidence=card.confidence,
-            )
-        await asyncio.to_thread(append_index, card_type, card_title, card_summary)
-        await asyncio.to_thread(append_log, card_type, card_title, str(wiki_rel).replace("\\", "/"))
-        commit_prefix = "skill" if as_skill else "ingest"
-        await asyncio.to_thread(commit_and_push, f"{commit_prefix}: {card_title}")
-
-    # 5. 飞书镜像（best-effort，锁外）
-    mirror_url = await _mirror_to_feishu(card_title, wiki_markdown)
-
-    # 6. 回复卡片
-    if reply_message_id:
-        await client.reply_card(
-            reply_message_id,
-            build_ingest_card(
-                title=card_title,
-                summary=card_summary,
-                tags=card_tags,
-                vault_path=str(wiki_rel).replace("\\", "/"),
-                mirror_url=mirror_url,
-            ),
-        )
-
-    return {
-        "ok": True,
-        "title": card_title,
-        "type": card_type,
-        "wiki_path": str(wiki_rel).replace("\\", "/"),
-        "raw_path": str(raw_rel).replace("\\", "/"),
-        "mirror_url": mirror_url,
-    }
+            parsed=await parse_any(text=text)
+        if not parsed.text.strip():raise RuntimeError('empty_source')
+        data={'text':parsed.text,'source':parsed.source_ref,'remark':getattr(parsed,'remark','')}
+        cache.parent.mkdir(parents=True,exist_ok=True)
+        tmp=cache.with_suffix('.tmp');tmp.write_text(json.dumps(data,ensure_ascii=False));tmp.chmod(0o600);tmp.replace(cache)
+    async with vault_write_gate.acquire():
+        raw_content,content_id=await asyncio.to_thread(save_extracted,jid,data['text'],data['source'],datetime.now().isoformat(timespec='seconds'))
+        # A different user comment is meaningful and must not be discarded by deduplication.
+        content_id=digest(content_id+'\n'+data['remark'])
+        result.update(content_path=raw_content,content_id=content_id)
+        inbox.update(jid,result=result)
+        refresh = await asyncio.to_thread(sync_vault,'source: '+jid,[result['raw_path'],raw_content])
+        duplicate=await asyncio.to_thread(find_content,content_id)
+    if duplicate:
+        from app.vault.collection import root
+        from app.vault.frontmatter import split_frontmatter
+        meta,body=split_frontmatter((root()/duplicate).read_text())
+        async with vault_write_gate.acquire():
+            new_raw, retired = await asyncio.to_thread(rename_source,jid,str(meta.get('title') or Path(duplicate).stem))
+            result.update(raw_path=new_raw,content_path=new_raw)
+            if retired:result['retired_paths']=list(dict.fromkeys(result.get('retired_paths',[])+[retired]))
+        result.update(wiki_path=duplicate,title=str(meta.get('title') or Path(duplicate).stem),summary='相同内容已收藏，已有正文和手动修改均保留。',preview='',duplicate=True)
+    else:
+        from app.vault.categories import load_rules, Rules
+        rules = await asyncio.to_thread(load_rules) if refresh.ok else Rules({}, 'Git 刷新失败，无法确认最新分类规则，已放入待整理。')
+        card=await compile_knowledge(data['text'], rules=rules)
+        card.category=rules.select(card.category)
+        async with vault_write_gate.acquire():
+            new_raw, retired = await asyncio.to_thread(rename_source,jid,card.title)
+            result.update(raw_path=new_raw,content_path=new_raw)
+            if retired:result['retired_paths']=list(dict.fromkeys(result.get('retired_paths',[])+[retired]))
+            inbox.update(jid,result=result)
+            raw_content=new_raw
+            path,duplicate=await asyncio.to_thread(save_page,card,content_id,list(dict.fromkeys([result['raw_path'],raw_content])),data['source'],data['remark'])
+        result.update(wiki_path=path,title=card.title,summary=card.summary,preview=card.to_markdown(),duplicate=duplicate)
+        if rules.warning:
+            result['summary']+='\n'+rules.warning
+            result['preview']+='\n\n'+rules.warning
+    inbox.update(jid,result=result)
+    return result

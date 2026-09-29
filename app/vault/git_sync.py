@@ -1,91 +1,68 @@
-"""Vault Git 同步：commit + push 到 ECS 自建 bare 仓库。
-
-best-effort：push 失败不阻断主流程，仅 logger.warning。
-"""
+"""Safe Git synchronization: ordinary merges, no automatic conflict-side selection."""
 from __future__ import annotations
-
 import subprocess
 from pathlib import Path
-
-from loguru import logger
-
+from dataclasses import dataclass
 from app.config import settings
 
-
-def _run(args: list[str], cwd: Path) -> tuple[int, str, str]:
-    proc = subprocess.run(
-        args,
-        cwd=str(cwd),
-        capture_output=True,
-        text=True,
-        encoding="utf-8",
-        errors="replace",
-    )
-    return proc.returncode, proc.stdout, proc.stderr
+@dataclass
+class SyncResult:
+    ok: bool
+    state: str
 
 
-def _ensure_git_identity(cwd: Path) -> None:
-    name = settings.vault_git_author_name or "Knowledge Bot"
-    email = settings.vault_git_author_email or "bot@knowledge-bot.local"
-    _run(["git", "config", "user.name", name], cwd)
-    _run(["git", "config", "user.email", email], cwd)
+def _run(args, cwd):
+    try:
+        p = subprocess.run(['git', *args], cwd=cwd, capture_output=True, text=True, timeout=60,
+                           env={**__import__('os').environ, 'GIT_TERMINAL_PROMPT':'0'})
+        return p.returncode, p.stdout.strip()
+    except (OSError, subprocess.TimeoutExpired):
+        return 1, ''
+
+
+def sync_vault(message='knowledge-bot sync', paths=None) -> SyncResult:
+    root = Path(settings.vault_path)
+    if not (root / '.git').exists():
+        return SyncResult(False, 'not_git')
+    rc, conflicts = _run(['ls-files','-u'], root)
+    if rc or conflicts:
+        return SyncResult(False, 'conflict')
+    for key,val in [('user.name',settings.vault_git_author_name),('user.email',settings.vault_git_author_email)]:
+        _run(['config',key,val],root)
+    if paths:
+        # A source rename may already have been committed before a push retry.
+        paths = [p for p in paths if (root/p).exists() or _run(['ls-files','--error-unmatch','--',p],root)[0] == 0]
+    if paths:
+        # Commit only artifacts belonging to this operation. Leave other edits alone.
+        rc,_ = _run(['add','--',*paths],root)
+        if rc:
+            return SyncResult(False,'stage_failed')
+        rc, changed = _run(['diff','--cached','--name-only','--',*paths],root)
+        if rc:
+            return SyncResult(False,'stage_failed')
+        if changed:
+            rc,_ = _run(['commit','--only','-m',message,'--',*paths],root)
+            if rc:
+                return SyncResult(False,'commit_failed')
+    rc, dirty = _run(['status','--porcelain'],root)
+    if rc or dirty:
+        return SyncResult(False,'working_tree_changed')
+    rc,_ = _run(['fetch','origin'],root)
+    if rc:
+        return SyncResult(False,'fetch_failed')
+    rc, upstream = _run(['rev-parse','--abbrev-ref','--symbolic-full-name','@{u}'],root)
+    if rc:
+        return SyncResult(False,'no_upstream')
+    rc,_ = _run(['merge','--no-edit',upstream],root)
+    if rc:
+        _run(['merge','--abort'],root)
+        return SyncResult(False,'conflict')
+    rc,_ = _run(['push'],root)
+    return SyncResult(rc==0,'synced' if rc==0 else 'push_failed')
 
 
 def commit_and_push(message: str) -> bool:
-    """在 VAULT_PATH 下 git add . → commit → push；返回是否成功推送。"""
-    root = Path(settings.vault_path)
-    if not (root / ".git").exists():
-        logger.warning("vault.git_sync: {} 不是 git 仓库，跳过", root)
-        return False
-
-    _ensure_git_identity(root)
-
-    rc, _, _ = _run(["git", "add", "-A"], root)
-    if rc != 0:
-        logger.warning("vault.git_sync: git add 失败")
-        return False
-
-    # 没有变更时 commit 会返回非零，这里先探测
-    rc_status, out_status, _ = _run(
-        ["git", "status", "--porcelain"], root
-    )
-    if rc_status == 0 and not out_status.strip():
-        logger.info("vault.git_sync: 无变更，跳过 commit")
-        return False
-
-    rc, out, err = _run(["git", "commit", "-m", message], root)
-    if rc != 0:
-        logger.warning("vault.git_sync: commit 失败 stdout={} stderr={}", out, err)
-        return False
-
-    rc, out, err = _run(["git", "push"], root)
-    if rc == 0:
-        logger.info("vault.git_sync: push 成功 - {}", message)
-        return True
-
-    # push 被 reject：bare 已有其他端（PC/手机）先 push 的 commit，
-    # 尝试 pull --rebase 一次再重试 push。冲突走 -X theirs 自动让本次 ingest 胜出。
-    logger.warning(
-        "vault.git_sync: 首次 push 失败，尝试 pull --rebase 再推 stderr={}", err
-    )
-    rc_r, out_r, err_r = _run(
-        ["git", "pull", "--rebase", "-X", "theirs"], root
-    )
-    if rc_r != 0:
-        logger.warning(
-            "vault.git_sync: pull --rebase 失败，放弃 push（commit 已落盘）stderr={}",
-            err_r,
-        )
-        _run(["git", "rebase", "--abort"], root)
-        return False
-
-    rc, out, err = _run(["git", "push"], root)
-    if rc != 0:
-        logger.warning(
-            "vault.git_sync: rebase 后 push 仍失败（commit 已落盘，稍后手动 push）stderr={}",
-            err,
-        )
-        return False
-
-    logger.info("vault.git_sync: rebase 后 push 成功 - {}", message)
-    return True
+    """Legacy helper, retained for offline maintenance scripts."""
+    root=Path(settings.vault_path)
+    rc,paths=_run(['ls-files','--modified','--others','--exclude-standard'],root)
+    return sync_vault(message, paths.splitlines() if not rc else None).ok

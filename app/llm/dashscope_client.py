@@ -30,17 +30,17 @@ async def chat(model: str, messages: list[dict[str, str]], **kwargs: Any) -> str
         resp = await client.post(url, headers=headers, json=payload)
 
     if resp.status_code != 200:
-        logger.error("dashscope call failed: status={} body={}", resp.status_code, resp.text[:500])
-        raise RuntimeError(f"dashscope error {resp.status_code}: {resp.text[:200]}")
+        logger.error("dashscope call failed: status={}", resp.status_code)
+        raise RuntimeError(f"dashscope error {resp.status_code}")
 
     data = resp.json()
     choices = data.get("choices") or []
     if not choices:
-        raise RuntimeError(f"dashscope empty choices: {data}")
+        raise RuntimeError("dashscope empty choices")
     message = choices[0].get("message") or {}
     content = message.get("content")
     if not isinstance(content, str):
-        raise RuntimeError(f"dashscope unexpected content: {message}")
+        raise RuntimeError("dashscope unexpected content")
     return content
 
 

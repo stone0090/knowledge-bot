@@ -5,7 +5,7 @@
 #   bash scripts/setup_ssh_keyless.sh
 #
 # 跑完以后：
-#   ssh kb                                   # 一键登录（替代 ssh -p 4500 root@121.196.26.127）
+#   ssh kb                                   # 一键登录（替代 ssh -p 4500 root@203.0.113.10）
 #   git clone kb:/opt/vault-bare.git ~/vault
 #
 # 可通过环境变量覆盖（都有默认值）：
@@ -13,7 +13,7 @@
 
 set -euo pipefail
 
-ECS_HOST="${ECS_HOST:-121.196.26.127}"
+ECS_HOST="${ECS_HOST:?Set ECS_HOST to your server address}"
 ECS_PORT="${ECS_PORT:-4500}"
 ECS_USER="${ECS_USER:-root}"
 SSH_ALIAS="${SSH_ALIAS:-kb}"
@@ -87,7 +87,7 @@ if ssh -o BatchMode=yes "$SSH_ALIAS" 'echo "=== 免密验证成功 ==="; hostnam
     echo "  git clone $SSH_ALIAS:/opt/vault-bare.git ~/vault"
     echo ""
     echo "【强烈建议现在做完两件事】"
-    echo "  1. ssh $SSH_ALIAS 'passwd'                     # 改 root 密码（对话里那个已泄露）"
+    echo "  1. ssh $SSH_ALIAS 'passwd'                     # 改 root 密码（按需修改）"
     echo "  2. 关闭密码登录，只允许公钥（更安全）："
     echo "     ssh $SSH_ALIAS \"sed -i 's/^#*PasswordAuthentication.*/PasswordAuthentication no/' /etc/ssh/sshd_config && systemctl restart sshd\""
 else

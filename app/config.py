@@ -43,6 +43,13 @@ class Settings(BaseSettings):
     vault_git_author_name: str = "Knowledge Bot"
     vault_git_author_email: str = "bot@knowledge-bot.local"
 
+    # Durable inbox and retries (outside Git / Obsidian)
+    state_path: str = "/opt/knowledge-bot-state"
+    worker_poll_seconds: float = 1.0
+    retry_delay_seconds: int = 60
+    max_job_attempts: int = 3
+    feishu_allowed_open_ids: str = ""
+
     # 百炼
     dashscope_api_key: str = ""
     # —— OpenAI 兼容协议端点（适配 sk-sp- 类型的 key）
