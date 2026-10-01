@@ -49,6 +49,24 @@ class FlowTests(unittest.IsolatedAsyncioTestCase):
             result=await self.runjob(j)
         self.assertEqual(result['status'],'done');self.assertTrue(result['result']['synced'])
         self.assertFalse((self.root/'index.md').exists());self.assertFalse((self.root/'log.md').exists())
+    async def test_images_are_synced_with_raw_before_model_failure(self):
+        from app.parsers.dispatcher import ParsedContent
+        from app.vault.images import FetchError
+        from app.jobs import state_root
+        text='![图片](<https://cdn.example/a.jpg>)'
+        j=self.new(text='https://example.com/article')
+        with patch('app.handlers.ingest.parse_any',AsyncMock(return_value=ParsedContent('url','https://example.com/article',text))), patch('app.handlers.ingest.download_images',AsyncMock(return_value={'https://cdn.example/a.jpg':(b'\xff\xd8\xffimage','.jpg')})), patch('app.handlers.ingest.sync_vault',return_value=SyncResult(True,'synced')) as sync, patch('app.handlers.ingest.compile_knowledge',AsyncMock(side_effect=RuntimeError('model failed'))):
+            result=await self.runjob(j)
+        assets=result['result']['asset_paths']
+        self.assertEqual(len(assets),1)
+        self.assertTrue((self.root/assets[0]).is_file())
+        self.assertIn(assets[0],sync.call_args.args[1])
+        raw=(self.root/result['result']['raw_path']).read_text()
+        self.assertIn('_assets/',raw);self.assertNotIn('https://cdn.example/a.jpg',raw)
+        self.db.retry('chat:user',j['id'])
+        with patch('app.handlers.ingest.sync_vault',return_value=SyncResult(True,'synced')), patch('app.handlers.ingest.download_images',AsyncMock(side_effect=FetchError('expired','expired'))):
+            await self.runjob(j)
+        self.assertFalse((state_root()/'parsed'/(j['id']+'.json')).exists())
     async def test_duplicate_content_preserves_manual_edit(self):
         with patch('app.handlers.ingest.sync_vault',return_value=SyncResult(True,'synced')),patch('app.worker.sync_vault',return_value=SyncResult(True,'synced')),patch('app.handlers.ingest.compile_knowledge',AsyncMock(return_value=card())) as llm:
             a=await self.runjob(self.new());p=self.root/a['result']['wiki_path'];p.write_text(p.read_text()+'\n我自己的经验。\n')

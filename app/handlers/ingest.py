@@ -10,6 +10,7 @@ from app.llm import compile_knowledge
 from app.vault.collection import save_received,save_extracted,save_page,digest,find_content,rename_source
 from app.vault.git_sync import sync_vault
 from app.vault.gate import vault_write_gate
+from app.vault.images import download_images, save_images
 
 
 async def collect(job, inbox):
@@ -27,7 +28,7 @@ async def collect(job, inbox):
             raw=await asyncio.to_thread(save_received,jid,received,source)
             result['raw_path']=raw
             inbox.update(jid,result=result)
-            await asyncio.to_thread(sync_vault,'collect: '+jid,[raw])
+            await asyncio.to_thread(sync_vault,'collect: '+jid,[raw]+result.get('asset_paths',[]))
     cache=state_root()/'parsed'/ (jid+'.json')
     import json
     if cache.exists():
@@ -46,13 +47,23 @@ async def collect(job, inbox):
         data={'text':parsed.text,'source':parsed.source_ref,'remark':getattr(parsed,'remark','')}
         cache.parent.mkdir(parents=True,exist_ok=True)
         tmp=cache.with_suffix('.tmp');tmp.write_text(json.dumps(data,ensure_ascii=False));tmp.chmod(0o600);tmp.replace(cache)
+    try:
+        downloads = await download_images(data['text'], data['source'])
+    except Exception:
+        # Signed URLs may have expired in the parsed cache. Retry the original page.
+        if data['source'].startswith(('http://', 'https://')):
+            cache.unlink(missing_ok=True)
+        raise
     async with vault_write_gate.acquire():
-        raw_content,content_id=await asyncio.to_thread(save_extracted,jid,data['text'],data['source'],datetime.now().isoformat(timespec='seconds'))
+        archived_text, assets = await asyncio.to_thread(save_images, data['text'], result['raw_path'], downloads)
+        result['asset_paths'] = assets
+        inbox.update(jid,result=result)
+        raw_content,content_id=await asyncio.to_thread(save_extracted,jid,archived_text,data['source'],datetime.now().isoformat(timespec='seconds'))
         # A different user comment is meaningful and must not be discarded by deduplication.
         content_id=digest(content_id+'\n'+data['remark'])
         result.update(content_path=raw_content,content_id=content_id)
         inbox.update(jid,result=result)
-        refresh = await asyncio.to_thread(sync_vault,'source: '+jid,[result['raw_path'],raw_content])
+        refresh = await asyncio.to_thread(sync_vault,'source: '+jid,[result['raw_path'],raw_content]+assets)
         duplicate=await asyncio.to_thread(find_content,content_id)
     if duplicate:
         from app.vault.collection import root

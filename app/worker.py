@@ -66,7 +66,7 @@ async def process(job,db):
         else:result={'text':HELP}
         db.update(jid,result=result)
         if result.get('wiki_path'):
-            paths=list(dict.fromkeys(x for x in [result.get('raw_path'),result.get('content_path'),result['wiki_path']]+result.get('retired_paths',[]) if x))
+            paths=list(dict.fromkeys(x for x in [result.get('raw_path'),result.get('content_path'),result['wiki_path']]+result.get('retired_paths',[])+result.get('asset_paths',[]) if x))
             async with vault_write_gate.acquire():sync=await asyncio.to_thread(sync_vault,'collect: '+jid,paths)
             result.update(synced=sync.ok,sync_state=sync.state)
             if not sync.ok:
